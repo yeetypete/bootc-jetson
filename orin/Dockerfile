@@ -8,10 +8,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 ARG DESTDIR=/out
 ARG RUST_VERSION=1.96.0
-# Pinned to a fork commit carrying the composefs registry-auth fix (restores
-# #2086, dropped by the PullOptions migration). Without it `bootc switch/upgrade`
-# from a private registry fails with "access denied" on the composefs backend.
-# Repoint at bootc-dev/bootc once the fix lands upstream.
+# TODO: switch to bootc-dev/bootc once https://github.com/bootc-dev/bootc/pull/2259 lands upstream.
 ARG BOOTC_REPO=https://github.com/yeetypete/bootc.git
 ARG BOOTC_VERSION=f4e612f526bc297501e391be551be33046e843b3
 ARG OSTREE_VERSION=v2026.1
@@ -68,11 +65,8 @@ RUN bash -c 'set -euo pipefail; curl --proto '=https' --tlsv1.2 -sSf https://sh.
     | sh -s -- -y --no-modify-path --profile minimal --default-toolchain ${RUST_VERSION}'
 
 WORKDIR /bootc
-# CARGO_FEATURES=rhel9 selects composefs-rs loopback EROFS mounts (plus the
-# pre-6.15 string-lowerdir overlay path), which work on the Jetson's 6.8 kernel.
-# Without it composefs-rs uses file-backed EROFS, needing CONFIG_EROFS_FS_BACKED_BY_FILE
-# (Linux 6.12+). `make bin` builds with --bins, unifying the feature onto the
-# bootc-initramfs-setup binary that mounts the composefs image.
+# CARGO_FEATURES=rhel9 selects composefs-rs loopback EROFS mounts, which work on
+# the Jetson's 6.8 kernel (file-backed EROFS needs Linux 6.12+).
 RUN git init && \
     git remote add origin ${BOOTC_REPO} && \
     git fetch --depth 1 origin ${BOOTC_VERSION} && \
@@ -80,18 +74,15 @@ RUN git init && \
     make bin install-all DESTDIR=${DESTDIR} CARGO_FEATURES=rhel9
 
 
-# Custom kernel with CONFIG_EROFS_FS + CONFIG_FS_VERITY, which nvidia-l4t-kernel
-# ships disabled. bootc's composefs+verity backend needs both at boot (EROFS to
-# mount the image, FS_VERITY to measure the sealed objects). It is configured as
-# NVIDIA does (`make defconfig` plus our options). OOT modules are rebuilt against
-# it below.
+# Custom kernel building EROFS + FS_VERITY in, which bootc's composefs+verity
+# backend needs at boot. nvidia-l4t-kernel ships them disabled. OOT modules are
+# rebuilt against it below.
 FROM ubuntu:24.04 AS kernel-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # r39.2 kernel source (the Noble 6.8 tree shipped as nvidia-l4t-kernel).
-# KERNEL_RELEASE is the stock uname -r, reproduced via LOCALVERSION so the
-# modules dir matches the apt-installed nvidia-l4t-kernel.
+# KERNEL_RELEASE is the stock uname -r, matched via LOCALVERSION below.
 ARG KERNEL_SRC_REPO=https://gitlab.com/nvidia/nv-tegra/3rdparty/canonical/linux-noble.git
 ARG KERNEL_SRC_TAG=jetson_39.2_GA
 ARG KERNEL_RELEASE=6.8.12-1021-tegra
@@ -130,9 +121,8 @@ RUN set -eux; \
       --enable EROFS_FS_ZIP_DEFLATE; \
     make ARCH=arm64 olddefconfig
 
-# Native arm64 build. LOCALVERSION=-1021-tegra makes uname -r match the
-# apt-installed nvidia-l4t-kernel (and its modules dir). Without it the raw git
-# tree builds as "6.8.12+".
+# Native arm64 build. LOCALVERSION makes uname -r (and the modules dir) match the
+# apt-installed nvidia-l4t-kernel.
 RUN set -eux; \
     kver="$(make -s ARCH=arm64 kernelversion)"; \
     suffix="${KERNEL_RELEASE#"$kver"}"; \
@@ -142,11 +132,8 @@ RUN set -eux; \
           "/out/lib/modules/${KERNEL_RELEASE}/source"; \
     install -D arch/arm64/boot/Image /out/boot/Image
 
-# Rebuild NVIDIA's out-of-tree modules against our kernel (the prebuilt ones are
-# built for a non-verity kernel and will not load). Per the r39.2 OOT modules
-# guide: fetch sources, point KERNEL_HEADERS at our built tree, build and install.
-# The display/gpu trees extract as nvdisplay/ and unifiedgpudisp/, which the OOT
-# Makefile expects.
+# Rebuild NVIDIA's out-of-tree modules against our kernel. The prebuilt ones are
+# built for a non-verity kernel and will not load.
 # https://docs.nvidia.com/jetson/archives/r39.2/DeveloperGuide/SD/Kernel/KernelCustomization.html
 ARG L4T_PUBLIC_SOURCES=https://developer.nvidia.com/downloads/embedded/l4t/r39_release_v2.0/sources/public_sources.tbz2
 RUN --mount=type=cache,target=/dl,sharing=locked \
@@ -164,8 +151,7 @@ RUN --mount=type=cache,target=/dl,sharing=locked \
       rm -f "/oot-src/${t}.tbz2"; \
     done
 
-# INSTALL_MOD_DIR=updates matches the stock layout. kernel_name=noble and empty
-# CROSS_COMPILE per the guide.
+# INSTALL_MOD_DIR=updates matches the stock module layout.
 WORKDIR /oot-src
 RUN set -eux; \
     export KERNEL_HEADERS=/kernel CROSS_COMPILE=; \
@@ -192,8 +178,8 @@ Pin: release *
 Pin-Priority: -1
 EOF
 
-# NVIDIA Jetson repos for JetPack 7.2 (Jetson Linux r39.2). 'som' is SoM-generic
-# and serves the whole Orin family. 'common' carries CUDA, TensorRT, and friends.
+# NVIDIA Jetson repos for JetPack 7.2 (Jetson Linux r39.2). 'som' serves the Orin
+# family, 'common' carries CUDA, TensorRT, and friends.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
@@ -208,17 +194,15 @@ deb [signed-by=/usr/share/keyrings/nvidia-jetson.gpg] https://repo.download.nvid
 deb [signed-by=/usr/share/keyrings/nvidia-jetson.gpg] https://repo.download.nvidia.com/jetson/som r39.2 main
 EOF
 
-# Stub update-initramfs (NVIDIA packages expect it, but we use dracut). Skip the
-# L4T preinst boot-firmware flash, which assumes a live install and flashes QSPI
-# immediately.
+# Stub update-initramfs (NVIDIA packages expect it, but we use dracut), and skip
+# the L4T preinst QSPI boot-firmware flash, which assumes a live install.
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/sbin/update-initramfs && \
     chmod +x /usr/sbin/update-initramfs && \
     mkdir -p /opt/nvidia/l4t-packages && \
     touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
 
-# Install the system. nvidia-l4t-kernel and the OOT module packages come in as
-# dependencies but we replace their kernel with our rebuild, so strip the stock
-# Image + modules in this same layer.
+# Install the system. nvidia-l4t-kernel and OOT modules arrive as dependencies,
+# so strip their stock Image + modules here in favor of our rebuild.
 ARG KERNEL_RELEASE=6.8.12-1021-tegra
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -268,18 +252,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
            "/usr/lib/modules/${KERNEL_RELEASE}/extra" \
            /boot/Image
 
-# Install our kernel. Configured from NVIDIA's defconfig with the full OOT source
-# rebuilt, so our module set covers the stock one stripped above. depmod re-runs
-# in the staging step below.
+# Install our kernel and modules. depmod re-runs in the staging step below.
 COPY --from=kernel-builder /out/boot/Image /boot/Image
 COPY --from=kernel-builder /out/lib/modules/${KERNEL_RELEASE}/ /usr/lib/modules/${KERNEL_RELEASE}/
 
 COPY rootfs/ /
 
-# Bake the NVIDIA GPU/display driver setup at build time. The nvidia-l4t-init
-# load services (nv-load-display-modules, nv-load-gpu-libs) do this at boot, but
-# they write to read-only /usr (depmod, libcuda symlink) and break on bootc, so
-# replicate their work here and mask them below. Orin is tegra234 -> nvgpu variant.
+# Bake the NVIDIA GPU/display driver setup at build time. The nvidia-l4t-init load
+# services do this at boot but write to read-only /usr, so we replicate their work
+# here and mask them below. Orin is tegra234 -> nvgpu variant.
 ARG GPU_VARIANT=nvgpu-l4t
 ARG GPU_LIB=nvgpu
 RUN cfgdir=/opt/nvidia/nv-disp-module-configs; \
@@ -298,9 +279,8 @@ RUN depmod "${KERNEL_RELEASE}"; \
       --kver "${KERNEL_RELEASE}" "/usr/lib/modules/${KERNEL_RELEASE}/initramfs.img"; \
     cp /boot/Image "/usr/lib/modules/${KERNEL_RELEASE}/vmlinuz"
 
-# Make the filesystem layout ostree-compatible. Remove the placeholder fstab too.
-# ostree's /etc overlay otherwise makes libmount emit a spurious "fstab has been
-# modified" warning at runtime.
+# Make the filesystem layout ostree-compatible. Remove the placeholder fstab too,
+# or ostree's /etc overlay makes libmount warn "fstab has been modified" at boot.
 # hadolint ignore=SC2114
 RUN rm -rf /boot /srv /home /root /usr/local /mnt && \
     mkdir -p /boot /sysroot /usr/lib/ostree /var && \
@@ -329,9 +309,8 @@ RUN systemctl enable \
     apt-daily.service \
     apt-daily.timer && \
     # nv-l4t-bootloader-config.service is not bootc-aware (runs lsblk on the
-    # composefs root and needs /etc/nv_boot_control.conf). On Orin (t23x) its
-    # only real job is keeping COMPATIBLE_SPEC current. UEFI and nvbootctrl read
-    # board identity from EEPROM directly, so masking it is safe.
+    # composefs root). On Orin it is safe to mask, since UEFI and nvbootctrl read
+    # board identity from EEPROM directly.
     rm -f \
     /etc/systemd/system/nv-load-display-modules.service \
     /etc/systemd/system/nv-load-gpu-libs.service \
@@ -345,23 +324,20 @@ RUN systemctl enable \
     nv-l4t-bootloader-config.service
 
 # Create home directory on first login and configure the ubuntu user. Drop the
-# deprecated pam_lastlog.so line (the module was removed from Ubuntu 24.04's
-# libpam-modules, so every console login logs a dlopen failure).
+# pam_lastlog.so line, since the module is gone from Ubuntu 24.04 and fails to dlopen.
 RUN pam-auth-update --enable mkhomedir && \
     sed -i '/pam_lastlog\.so/d' /etc/pam.d/login && \
     usermod -p "$(mkpasswd -m sha-512 'ubuntu')" ubuntu && \
     echo "ubuntu ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu && \
     chmod 440 /etc/sudoers.d/ubuntu
 
-# Relocate the dpkg database to /usr so it persists across image updates. Content
-# in /var is only applied at initial provisioning, so a tmpfiles.d symlink restores
-# /var/lib/dpkg at boot. This mirrors rpm's /usr/lib/sysimage/rpm.
+# Relocate the dpkg database to /usr so it persists across image updates (/var is
+# only applied at first provisioning). A tmpfiles.d symlink restores /var/lib/dpkg.
 RUN mkdir -p /usr/lib/sysimage && \
     mv /var/lib/dpkg /usr/lib/sysimage/dpkg
 
 # Embed registry pull secret for bootc upgrades from a private registry. -s skips
-# cleanly when the secret is absent or empty. Local builds proceed without it and
-# CI with a real token logs in.
+# cleanly when absent, so local builds work without it.
 RUN --mount=type=secret,id=ostree-auth,required=false \
     if [ -s /run/secrets/ostree-auth ]; then \
     skopeo login --authfile /usr/lib/ostree/auth.json \
