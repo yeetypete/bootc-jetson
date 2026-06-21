@@ -23,7 +23,7 @@ target "_common" {
     "org.opencontainers.image.revision" = REVISION
   }
   secret = ["id=ostree-auth,env=OSTREE_AUTH"]
-  output = ["type=registry"]
+  output = ["type=docker"]
 }
 
 target "jetson-orin" {
