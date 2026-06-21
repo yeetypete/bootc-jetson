@@ -1,0 +1,2 @@
+kargs = ["console=tty0", "console=ttyTCU0,115200"]
+match-architectures = ["aarch64"]
