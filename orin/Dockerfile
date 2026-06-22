@@ -280,7 +280,7 @@ RUN depmod "${KERNEL_RELEASE}"; \
     cp /boot/Image "/usr/lib/modules/${KERNEL_RELEASE}/vmlinuz"
 
 # Make the filesystem layout ostree-compatible. Remove the placeholder fstab too,
-# or ostree's /etc overlay makes libmount warn "fstab has been modified" at boot.
+# or bootc's /etc overlay makes libmount warn "fstab has been modified" at boot.
 # hadolint ignore=SC2114
 RUN rm -rf /boot /srv /home /root /usr/local /mnt && \
     mkdir -p /boot /sysroot /usr/lib/ostree /var && \
