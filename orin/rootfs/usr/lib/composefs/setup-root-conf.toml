@@ -5,4 +5,4 @@
 transient = true
 
 [etc]
-mount = "transient"
+transient = true
