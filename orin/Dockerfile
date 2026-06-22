@@ -297,7 +297,6 @@ RUN rm -rf /boot /srv /home /root /usr/local /mnt && \
 RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 RUN systemctl enable \
-    ostree-remount.service \
     ssh.service \
     systemd-networkd.service \
     systemd-resolved.service \
