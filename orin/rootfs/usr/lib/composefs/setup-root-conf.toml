@@ -1,8 +1,5 @@
 # composefs-native backend mount configuration, read by bootc-root-setup.service
 # in the initramfs (see crates/initramfs in bootc).
 
-[root]
-transient = true
-
 [etc]
 transient = true
