@@ -22,7 +22,6 @@ target "_common" {
     "org.opencontainers.image.version"  = VERSION
     "org.opencontainers.image.revision" = REVISION
   }
-  secret = ["id=ostree-auth,env=OSTREE_AUTH"]
   output = ["type=docker"]
 }
 
