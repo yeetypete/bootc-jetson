@@ -19,7 +19,7 @@ group "default" {
 
 target "_common" {
   labels = {
-    "org.opencontainers.image.version"  = VERSION
+    "org.opencontainers.image.version"  = trimprefix(VERSION, "v")
     "org.opencontainers.image.revision" = REVISION
   }
   output = ["type=docker,compression=zstd"]
@@ -31,7 +31,7 @@ target "jetson-orin" {
   context    = "./orin"
   platforms  = ["linux/arm64"]
   tags = [
-    "${IMAGE}:orin-jp7.2-${VERSION}",
+    "${IMAGE}:orin-jp7.2-${trimprefix(VERSION, "v")}",
     "${IMAGE}:orin-jp7.2",
   ]
 }
