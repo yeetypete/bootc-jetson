@@ -86,16 +86,17 @@ jobs:
 
       - name: Compress and checksum disk image
         run: |
-          xz -T0 -v "${{ inputs.disk-name }}.img"
-          sha256sum "${{ inputs.disk-name }}.img.xz" \
-            > "${{ inputs.disk-name }}.img.xz.sha256"
+          zstd -T0 -v \
+            -o "${{ inputs.disk-name }}.img.zst" "${{ inputs.disk-name }}.img"
+          sha256sum "${{ inputs.disk-name }}.img.zst" \
+            > "${{ inputs.disk-name }}.img.zst.sha256"
 
       - name: Upload disk image artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: disk-image-${{ inputs.bake-target }}
           path: |
-            ${{ inputs.disk-name }}.img.xz
-            ${{ inputs.disk-name }}.img.xz.sha256
+            ${{ inputs.disk-name }}.img.zst
+            ${{ inputs.disk-name }}.img.zst.sha256
           if-no-files-found: error
           retention-days: 5
