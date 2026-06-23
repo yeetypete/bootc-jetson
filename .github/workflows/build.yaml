@@ -80,7 +80,6 @@ jobs:
             -v .:/output \
             "docker.io/yeetypete/bootc-jetson:${{ inputs.image-tag }}" \
             bootc install to-disk \
-              --generic-image \
               --composefs-backend \
               --via-loopback "/output/${{ inputs.disk-name }}.img"
 
