@@ -8,9 +8,8 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 ARG DESTDIR=/out
 ARG RUST_VERSION=1.96.0
-# TODO: switch to bootc-dev/bootc once https://github.com/bootc-dev/bootc/pull/2259 lands upstream.
-ARG BOOTC_REPO=https://github.com/yeetypete/bootc.git
-ARG BOOTC_VERSION=f4e612f526bc297501e391be551be33046e843b3
+ARG BOOTC_REPO=https://github.com/bootc-dev/bootc.git
+ARG BOOTC_VERSION=946874cfacef88e596b3e6233feaf4df698d5dd4
 ARG OSTREE_VERSION=v2026.1
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
