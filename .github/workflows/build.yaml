@@ -57,6 +57,7 @@ jobs:
           targets: ${{ inputs.bake-target }}
           set: |
             *.output=type=oci,dest=image.oci,compression=zstd
+            *.tags=docker.io/yeetypete/bootc-jetson:${{ inputs.image-tag }}
             *.cache-from=type=gha,scope=${{ inputs.bake-target }}
             *.cache-to=type=gha,mode=max,scope=${{ inputs.bake-target }}
         env:
