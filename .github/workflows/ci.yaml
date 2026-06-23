@@ -1,0 +1,132 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Run pre-commit hooks
+        uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2
+
+  variants:
+    name: Get image variants
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      list: ${{ steps.read.outputs.list }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Read image variants
+        id: read
+        run: echo "list=$(jq -c . .github/image-variants.json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build
+    needs: variants
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.variants.outputs.list) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build.yaml
+    with:
+      bake-target: ${{ matrix.bake-target }}
+      image-tag: ${{ matrix.image-tag }}
+      disk-name: ${{ github.ref_type == 'tag' && format('{0}-{1}', matrix.disk-name, github.ref_name) || matrix.disk-name }}
+      version: ${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
+      revision: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  publish-image:
+    name: publish-image (${{ matrix.bake-target }})
+    if: github.ref_type == 'tag'
+    needs: [variants, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.variants.outputs.list) }}
+    runs-on: ubuntu-24.04-arm
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          username: ${{ vars.DOCKER_ACCOUNT }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - name: Push bootc container image
+        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7
+        with:
+          source: .
+          targets: ${{ matrix.bake-target }}
+          set: |
+            *.output=type=image,push=true,compression=zstd
+            *.cache-from=type=gha,scope=${{ matrix.bake-target }}
+            *.cache-to=type=gha,mode=max,scope=${{ matrix.bake-target }}
+        env:
+          VERSION: ${{ github.ref_name }}
+          REVISION: ${{ github.sha }}
+
+  release:
+    name: release
+    if: github.ref_type == 'tag'
+    needs: [build, publish-image]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download disk image artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: disk-image-*
+          path: disk-image
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            disk-image/*

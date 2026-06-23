@@ -334,14 +334,6 @@ RUN pam-auth-update --enable mkhomedir && \
 RUN mkdir -p /usr/lib/sysimage && \
     mv /var/lib/dpkg /usr/lib/sysimage/dpkg
 
-# Embed registry pull secret for bootc upgrades from a private registry. -s skips
-# cleanly when absent, so local builds work without it.
-RUN --mount=type=secret,id=ostree-auth,required=false \
-    if [ -s /run/secrets/ostree-auth ]; then \
-    skopeo login --authfile /usr/lib/ostree/auth.json \
-    -u yeetypete --password-stdin docker.io < /run/secrets/ostree-auth; \
-    fi
-
 # bootc expects /var empty (populated at boot via tmpfiles.d) and /run, /tmp clean.
 RUN rm -rf /run/* /tmp/* /var/log/* && \
     find /var -mindepth 1 -type f -delete && \

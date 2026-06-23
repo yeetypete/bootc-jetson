@@ -1,0 +1,102 @@
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      bake-target:
+        description: "docker bake target to build."
+        type: string
+        required: true
+      image-tag:
+        description: "Tag of the built image to install from."
+        type: string
+        required: true
+      disk-name:
+        description: "Base name of the disk image, without the .img extension."
+        type: string
+        required: true
+      version:
+        description: "Image version tag suffix."
+        type: string
+        required: true
+      revision:
+        description: "Git commit SHA for image labels."
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      REVISION: ${{ inputs.revision }}
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - name: Build bootc container image
+        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7
+        with:
+          source: .
+          targets: ${{ inputs.bake-target }}
+          set: |
+            *.output=type=oci,dest=image.oci,compression=zstd
+            *.tags=docker.io/yeetypete/bootc-jetson:${{ inputs.image-tag }}
+            *.cache-from=type=gha,scope=${{ inputs.bake-target }}
+            *.cache-to=type=gha,mode=max,scope=${{ inputs.bake-target }}
+        env:
+          VERSION: ${{ env.VERSION }}
+          REVISION: ${{ env.REVISION }}
+
+      - name: Load image into podman
+        run: |
+          sudo podman load -i image.oci
+          rm -f image.oci
+
+      - name: Create disk image
+        run: |
+          truncate -s 10G "${{ inputs.disk-name }}.img"
+          sudo podman run \
+            --rm --privileged --pid=host \
+            --security-opt label=type:unconfined_t \
+            -e RUST_LOG=debug \
+            -v /dev:/dev \
+            -v /var/lib/containers:/var/lib/containers \
+            -v .:/output \
+            "docker.io/yeetypete/bootc-jetson:${{ inputs.image-tag }}" \
+            bootc install to-disk \
+              --composefs-backend \
+              --via-loopback "/output/${{ inputs.disk-name }}.img"
+
+      - name: Compress and checksum disk image
+        run: |
+          zstd -T0 -v \
+            -o "${{ inputs.disk-name }}.img.zst" "${{ inputs.disk-name }}.img"
+          sha256sum "${{ inputs.disk-name }}.img.zst" \
+            > "${{ inputs.disk-name }}.img.zst.sha256"
+
+      - name: Upload disk image artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: disk-image-${{ inputs.bake-target }}
+          path: |
+            ${{ inputs.disk-name }}.img.zst
+            ${{ inputs.disk-name }}.img.zst.sha256
+          if-no-files-found: error
+          retention-days: 5
