@@ -1,46 +1,49 @@
-# bootc-jetson developer tasks.
+# bootc-jetson developer tasks. The justfile is the single entrypoint for
+# building, packaging, and flashing images; CI is a thin wrapper over these
+# recipes. The toolchain is docker-only (no podman): docker buildx bake builds
+# the image, and `bootc install` runs under docker via --source-imgref.
 
 # Image repository for the built images.
-image := "yeetypete/bootc-jetson"
-# Version tag for the built images.
-version := "0.0.0"
+image := "docker.io/yeetypete/bootc-jetson"
+# Version for image labels and tag suffix (bake strips a leading "v").
+version := "v0.0.0"
 # Git commit SHA for image labels.
 revision := `git rev-parse HEAD 2>/dev/null || echo ""`
 
-# Build context and tags for the Jetson Orin variant.
-context := "orin"
-tag := "orin-jp7.2"
+# JetPack release these images target.
+jetpack := "7.2"
 
-# Disk image settings (see .github/image-variants.json).
-disk_name := "bootc-jetson-orin"
+# Variant to build (override: `just variant=thor dist`). Each name is its build dir.
+variant := "orin"
+target := "jetson-" + variant
+tag := variant + "-jp" + jetpack
+disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 
 # List available recipes.
 default:
     @just --list
 
-# Build the Jetson Orin bootc container image.
-build:
-    podman build \
-        --platform linux/arm64 \
-        --label org.opencontainers.image.version={{ version }} \
-        --label org.opencontainers.image.revision={{ revision }} \
-        -f {{ context }}/Dockerfile \
-        -t {{ image }}:{{ tag }} \
-        -t {{ image }}:{{ tag }}-{{ version }} \
-        {{ context }}
+# Build the bootc container image with docker buildx bake. Extra args pass through,
+# e.g. `just build --push` or `just build '--set *.cache-to=type=gha'`.
+build *args:
+    IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} \
+        docker buildx bake {{ target }} {{ args }}
 
 # Convert the built image into a flashable raw disk image via bootc install to-disk.
+# Runs under docker; --source-imgref reads the image from the docker daemon, so no
+# podman / containers-storage is needed.
 disk:
     truncate -s {{ disk_size }} {{ disk_name }}.img
-    sudo podman run \
-        --rm --privileged --pid=host \
-        --security-opt label=type:unconfined_t \
+    docker run \
+        --rm --privileged \
+        --security-opt label=disable \
+        -v /var/run/docker.sock:/var/run/docker.sock \
         -v /dev:/dev \
-        -v /var/lib/containers:/var/lib/containers \
-        -v .:/output \
+        -v "$PWD:/output" \
         {{ image }}:{{ tag }} \
         bootc install to-disk \
+            --source-imgref docker-daemon:{{ image }}:{{ tag }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
