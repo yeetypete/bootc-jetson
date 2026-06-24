@@ -77,10 +77,9 @@ just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
 ```
 
-> [!NOTE]
-> Once booted, the system updates transactionally with `bootc upgrade`, which
-> pulls a newer image and stages it as a new deployment you can roll back to if
-> needed. See the [`bootc` upgrade docs](https://bootc-dev.github.io/bootc/upgrades.html).
+Once booted, the system updates transactionally with `bootc upgrade`, which
+pulls a newer image and stages it as a new deployment you can roll back to if
+needed. See the [`bootc` upgrade docs](https://bootc-dev.github.io/bootc/upgrades.html).
 
 ## License
 
