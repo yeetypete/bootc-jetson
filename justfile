@@ -1,7 +1,7 @@
 # bootc-jetson developer tasks.
 
 # Image repository for the built images.
-image := "docker.io/yeetypete/bootc-jetson"
+image := "yeetypete/bootc-jetson"
 # Version for image labels and tag suffix (bake strips a leading "v").
 version := "v0.0.0"
 # Git commit SHA for image labels.

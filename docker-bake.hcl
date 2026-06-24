@@ -1,6 +1,6 @@
 variable "IMAGE" {
   description = "Image repository for the built images."
-  default     = "docker.io/yeetypete/bootc-jetson"
+  default     = "yeetypete/bootc-jetson"
 }
 
 variable "VERSION" {
