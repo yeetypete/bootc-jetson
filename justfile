@@ -1,7 +1,4 @@
-# bootc-jetson developer tasks. The justfile is the single entrypoint for
-# building, packaging, and flashing images; CI is a thin wrapper over these
-# recipes. The toolchain is docker-only (no podman): docker buildx bake builds
-# the image, and `bootc install` runs under docker via --source-imgref.
+# bootc-jetson developer tasks.
 
 # Image repository for the built images.
 image := "docker.io/yeetypete/bootc-jetson"
@@ -24,15 +21,12 @@ disk_size := "10G"
 default:
     @just --list
 
-# Build the bootc container image with docker buildx bake. Extra args pass through,
-# e.g. `just build --push` or `just build '--set *.cache-to=type=gha'`.
+# Build the bootc container image.
 build *args:
     IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} \
-        docker buildx bake {{ target }} {{ args }}
+        docker bake {{ target }} {{ args }}
 
 # Convert the built image into a flashable raw disk image via bootc install to-disk.
-# Runs under docker; --source-imgref reads the image from the docker daemon, so no
-# podman / containers-storage is needed.
 disk:
     truncate -s {{ disk_size }} {{ disk_name }}.img
     docker run \
