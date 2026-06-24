@@ -37,7 +37,7 @@ disk:
         -v "$PWD:/output" \
         {{ image }}:{{ tag }} \
         bootc install to-disk \
-            --source-imgref oci-archive:/output/{{ oci_archive }} \
+            --source-imgref oci-archive:/output/{{ oci_archive }}:{{ tag }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
