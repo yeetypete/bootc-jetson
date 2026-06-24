@@ -36,7 +36,7 @@ Support is currently limited to:
   JetPack 7.2 (see [Provisioning a Jetson Orin](#provisioning-a-jetson-orin)).
 - A Linux host with [`just`](https://github.com/casey/just) and `zstd` to flash
   a release build (see [Option 1](#option-1-flash-a-release-build)).
-- Only for [building locally](#option-2-build-locally): a `linux/arm64` host with
+- Only for [building locally](#option-2-build-locally): an `arm64` host with
   [Docker](https://docs.docker.com/) installed.
 
 ## Provisioning a Jetson Orin
@@ -51,10 +51,11 @@ Support is currently limited to:
 
 ### Option 1: flash a release build
 
-Download the latest `…-orin.img.zst` (and its `.sha256`) from the
-[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) — CI
-attaches a compressed, checksummed disk image to each release. Verify and
-decompress it, then write it to an SSD:
+Download the latest `bootc-jetson-orin-<version>.img.zst` and its matching
+`bootc-jetson-orin-<version>.img.zst.sha256` from the
+[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) page.
+Verify and decompress it, then write it to your Jetson's root filesystem
+device (e.g. an SSD):
 
 ```bash
 sha256sum -c bootc-jetson-orin*.img.zst.sha256
