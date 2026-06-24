@@ -16,6 +16,7 @@ target := "jetson-" + variant
 tag := variant + "-jp" + jetpack
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
+oci_archive := "image.oci"
 
 # List available recipes.
 default:
@@ -32,12 +33,11 @@ disk:
     docker run \
         --rm --privileged \
         --security-opt label=disable \
-        -v /var/run/docker.sock:/var/run/docker.sock \
         -v /dev:/dev \
         -v "$PWD:/output" \
         {{ image }}:{{ tag }} \
         bootc install to-disk \
-            --source-imgref docker-daemon:{{ image }}:{{ tag }} \
+            --source-imgref oci-archive:/output/{{ oci_archive }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
@@ -53,6 +53,6 @@ dist: disk compress
 flash image=(disk_name + ".img"):
     scripts/flash.sh {{ image }}
 
-# Remove generated disk images.
+# Remove generated disk images and the OCI archive.
 clean:
-    rm -f {{ disk_name }}*.img {{ disk_name }}*.img.zst {{ disk_name }}*.img.zst.sha256
+    rm -f {{ disk_name }}*.img {{ disk_name }}*.img.zst {{ disk_name }}*.img.zst.sha256 {{ oci_archive }}

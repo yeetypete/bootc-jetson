@@ -22,7 +22,10 @@ target "_common" {
     "org.opencontainers.image.version"  = trimprefix(VERSION, "v")
     "org.opencontainers.image.revision" = REVISION
   }
-  output = ["type=docker,compression=zstd"]
+  output = [
+    "type=docker,compression=zstd",
+    "type=oci,dest=image.oci,compression=zstd",
+  ]
 }
 
 target "jetson-orin" {
