@@ -24,7 +24,7 @@ default:
 # Build the bootc container image.
 build *args:
     IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} \
-        docker bake {{ target }} {{ args }}
+        docker buildx bake {{ target }} {{ args }}
 
 # Convert the built image into a flashable raw disk image via bootc install to-disk.
 disk:
