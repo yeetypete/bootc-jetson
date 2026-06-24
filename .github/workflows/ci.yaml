@@ -78,7 +78,8 @@ jobs:
             variant='${{ matrix.variant }}' \
             version='${{ github.ref_name }}' \
             revision='${{ github.sha }}' \
-            build --push \
+            build \
+              --set '*.output=type=registry,compression=zstd' \
               --set '*.cache-from=type=gha,scope=${{ matrix.variant }}' \
               --set '*.cache-to=type=gha,mode=max,scope=${{ matrix.variant }}'
 
