@@ -2,16 +2,15 @@
 
 # Image repository for the built images.
 image := "yeetypete/bootc-jetson"
-# Version for image labels and tag suffix (bake strips a leading "v").
+# Version for image labels and tag suffix (docker bake strips a leading "v").
 version := "v0.0.0"
 # Git commit SHA for image labels.
 revision := `git rev-parse HEAD 2>/dev/null || echo ""`
-
 # JetPack release these images target.
 jetpack := "7.2"
-
-# Variant to build (override: `just variant=thor dist`). Each name is its build dir.
+# Variant to build, e.g. `just variant=orin dist`. Each name is the variant's build dir.
 variant := "orin"
+
 target := "jetson-" + variant
 tag := variant + "-jp" + jetpack
 disk_name := "bootc-jetson-" + variant
@@ -46,10 +45,10 @@ compress:
     zstd -T0 -v -o {{ disk_name }}.img.zst {{ disk_name }}.img
     sha256sum {{ disk_name }}.img.zst > {{ disk_name }}.img.zst.sha256
 
-# Build, compress, and checksum the disk image (full distributable artifact).
+# Build, compress, and checksum the disk image.
 dist: disk compress
 
-# Write a disk image to a USB-attached SSD.
+# Write a disk image to an external storage device.
 flash image=(disk_name + ".img"):
     scripts/flash.sh {{ image }}
 
