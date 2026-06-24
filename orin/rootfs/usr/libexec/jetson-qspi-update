@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# Stage a Jetson QSPI firmware update via UEFI capsule-on-disk when the running
+# firmware is older than the version shipped in this image.
+#
+# bootc/composefs layout: /boot is read-only and the ESP is not mounted at
+# runtime (systemd-boot reads it at firmware time). We locate the ESP by label
+# and mount it transiently to stage the capsule, like bootc's own mount_esp().
+#
+# Runs every boot and is idempotent. Firmware current: exit 0. Update needed:
+# stage the capsule once, exit 0. A staged capsule that was never applied (UEFI
+# ignored it, or the flash failed) exits non-zero so the unit shows as failed
+# rather than silently re-staging forever.
+#
+# Version reads and capsule status come from NVIDIA's own on-target tooling so
+# we track their source of truth rather than reimplement it: the target is the
+# installed nvidia-l4t-bootloader deb version and the current is the ESRT
+# firmware version, compared exactly as nvidia-l4t-bootloader-utils'
+# auto_update_bootloader does.
+set -euo pipefail
+
+# JetPack 7 ships the firmware capsules inside the nvidia-l4t-bootloader
+# package under /opt/ota_package (nested per chip family, e.g. t23x/).
+CAPSULE_SEARCH_DIR="/opt/ota_package"
+EFI_GLOBAL_GUID="8be4df61-93ca-11d2-aa0d-00e098032b8c"
+OS_INDICATIONS="/sys/firmware/efi/efivars/OsIndications-${EFI_GLOBAL_GUID}"
+
+# Target source of truth, matching NVIDIA's BL_PACKAGE_NAME default.
+BL_PACKAGE_NAME="nvidia-l4t-bootloader"
+sys_ver=""
+bsp_ver=""
+
+# read_sys_ver and read_bsp_ver_from_esrt are copied verbatim from NVIDIA's
+# /opt/nvidia/l4t-bootloader-config/nv-l4t-version-utils.sh (shipped on-target
+# by nvidia-l4t-bootloader-utils). They set the globals sys_ver and bsp_ver to
+# the ESRT decimal encoding (rel<<16 | maj<<8 | min).
+read_sys_ver() {
+    local sys_rel=""
+    local sys_maj_ver=""
+    local sys_min_ver=""
+    local installed_deb_ver=""
+    local deb_version=""
+
+    # 1. Get installed bootloader package's version
+    # Sample: 35.3.1-20230314154120
+    installed_deb_ver="$(dpkg-query -W -f '${Version}' "${BL_PACKAGE_NAME}" 2>/dev/null)"
+    if [ "${installed_deb_ver}" == "" ]; then
+        return 1
+    fi
+
+    # 2. Get main deb_version
+    deb_version="$(echo "${installed_deb_ver}" | cut -d "-" -f 1)"
+
+    # 3. Use deb_version as sys_version
+    # Sample: sys_rel=35, sys_maj_ver=3, sys_min_ver=1
+    sys_rel="$(echo "${deb_version}" | cut -d "." -f 1)"
+    sys_maj_ver="$(echo "${deb_version}" | cut -d "." -f 2)"
+    sys_min_ver="$(echo "${deb_version}" | cut -d "." -f 3)"
+
+    # 4. Convert the sys_version as a decimal number to compare with bsp_version
+    # It's hex value is 0xRRRRMMmm
+    # R=Release
+    # M=Major number
+    # m=minor number
+    # E.g. 2294529=0x230301=35.3.1
+    sys_ver=$(((sys_rel << 16) | (sys_maj_ver << 8) | sys_min_ver))
+
+    return 0
+}
+
+# Read bsp version from ESRT, the version is a decimal number
+read_bsp_ver_from_esrt() {
+    local esrt_ver_path="/sys/firmware/efi/esrt/entries/entry0/fw_version"
+
+    if [ -f "${esrt_ver_path}" ]; then
+        bsp_ver=$(cat "${esrt_ver_path}")
+    fi
+
+    if [ "${bsp_ver}" = "" ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+# True if OsIndications bit 2 (FILE_CAPSULE_DELIVERY_SUPPORTED) is set, i.e. a
+# capsule-on-disk request is pending. UEFI clears it on consuming the request,
+# so a still-set bit on a later boot means the staged capsule was not processed.
+os_indications_pending() {
+    [ -e "$OS_INDICATIONS" ] || return 1
+    # 12-byte var: 4-byte attributes then 8-byte LE value. Bit 2 (0x04) lives
+    # in the value's low byte at file offset 4.
+    local byte
+    byte=$(od -An -tu1 -j4 -N1 "$OS_INDICATIONS" 2>/dev/null | tr -d ' ')
+    [ -n "$byte" ] && [ $((byte & 4)) -ne 0 ]
+}
+
+read_sys_ver || {
+    echo "Could not read ${BL_PACKAGE_NAME} version; skipping." >&2
+    exit 0
+}
+read_bsp_ver_from_esrt || {
+    echo "Could not read ESRT firmware version; skipping." >&2
+    exit 0
+}
+
+echo "QSPI firmware: current(ESRT)=${bsp_ver} target(${BL_PACKAGE_NAME})=${sys_ver}"
+
+if [ "$bsp_ver" -ge "$sys_ver" ]; then
+    echo "QSPI firmware is already up to date."
+    exit 0
+fi
+
+echo "QSPI firmware update needed: ${bsp_ver} -> ${sys_ver}"
+
+# Fail rather than silently re-stage every boot if a capsule was already
+# attempted while firmware is still old, so a stuck update is visible. Two
+# signals:
+#   - OsIndications still set: we staged on a prior boot and UEFI never
+#     consumed the request (e.g. could not find/read the capsule).
+#   - nvbootctrl capsule status 2 or 3: UEFI consumed the capsule and the
+#     update failed (2 = installed but new firmware did not boot, 3 = install
+#     failed; 0 = none, 1 = success).
+capsule_status=$(nvbootctrl dump-slots-info 2>/dev/null | grep "Capsule update status" | awk '{print $4}' || true)
+echo "Capsule update status (nvbootctrl): ${capsule_status:-unknown}"
+
+if os_indications_pending; then
+    echo "A capsule was staged on a previous boot but UEFI has not consumed it" >&2
+    echo "(OsIndications still set, firmware still ${bsp_ver}). Capsule-on-disk is" >&2
+    echo "not applying on this device. Flash via USB recovery with the NVIDIA L4T" >&2
+    echo "BSP (Linux_for_Tegra/flash.sh)." >&2
+    exit 1
+fi
+if [ "${capsule_status}" = "2" ] || [ "${capsule_status}" = "3" ]; then
+    echo "UEFI attempted the capsule but firmware is still ${bsp_ver} (nvbootctrl" >&2
+    echo "capsule status ${capsule_status}). The QSPI update failed. Flash via USB" >&2
+    echo "recovery with the NVIDIA L4T BSP (Linux_for_Tegra/flash.sh)." >&2
+    exit 1
+fi
+
+# Select the capsule for THIS board, following edk2-nvidia's PreIsoInstaller
+# table (README_PreIsoInstaller.md): for board 3767, "super" maps to
+# TEGRA_BL_3767_super.Cap, otherwise TEGRA_BL_3767.Cap. Skip unmapped boards
+# (flash via USB recovery with the NVIDIA L4T BSP).
+compatible=$(tr '\0' ' ' </proc/device-tree/compatible)
+case "$compatible" in
+*p3767*super*) capsule_name="TEGRA_BL_3767_super.Cap" ;; # Orin Nano/NX, Super
+*p3767*) capsule_name="TEGRA_BL_3767.Cap" ;;             # Orin Nano/NX
+*)
+    echo "No verified capsule mapping for this board (${compatible}); skipping." >&2
+    echo "Flash QSPI manually via USB recovery with the NVIDIA L4T BSP" >&2
+    echo "(Linux_for_Tegra/flash.sh) if an update is needed." >&2
+    exit 0
+    ;;
+esac
+
+# mapfile via process substitution rather than `find | sort | head`: under
+# pipefail a missing search dir or head closing the pipe early would abort the
+# script instead of reaching the not-found message below.
+mapfile -t capsule_files < <(find "$CAPSULE_SEARCH_DIR" -type f -name "$capsule_name" 2>/dev/null | sort)
+CAPSULE_FILE="${capsule_files[0]:-}"
+if [ -z "$CAPSULE_FILE" ]; then
+    # An update is needed but the capsule the image should ship is missing, a
+    # packaging problem worth surfacing rather than a silent skip.
+    echo "Capsule ${capsule_name} not found under ${CAPSULE_SEARCH_DIR}." >&2
+    exit 1
+fi
+echo "Selected capsule: ${CAPSULE_FILE}"
+
+# Locate the ESP by the EFI-SYSTEM label bootc assigns at install time, then
+# mount it transiently.
+esp_dev=$(blkid -L EFI-SYSTEM) || {
+    echo "No ESP labeled EFI-SYSTEM found; cannot stage capsule." >&2
+    exit 1
+}
+echo "ESP partition: ${esp_dev}"
+
+# Mount the ESP transiently, stage the capsule under EFI/UpdateCapsule/,
+# then unmount on exit.
+esp_mnt=$(mktemp -d /run/qspi-esp.XXXXXX)
+cleanup() {
+    umount "$esp_mnt" 2>/dev/null || true
+    rmdir "$esp_mnt" 2>/dev/null || true
+}
+trap cleanup EXIT
+mount -t vfat -o rw,nosuid,noexec,fmask=0177,dmask=0077 "$esp_dev" "$esp_mnt"
+
+capsule_dir="${esp_mnt}/EFI/UpdateCapsule"
+mkdir -p "$capsule_dir"
+cp "$CAPSULE_FILE" "$capsule_dir/"
+sync
+echo "Capsule staged at <ESP>/EFI/UpdateCapsule/$(basename "$CAPSULE_FILE")"
+
+# Set OsIndications EFI variable to request capsule processing on next boot.
+# Bit 2 = EFI_OS_INDICATIONS_FILE_CAPSULE_DELIVERY_SUPPORTED.
+# Format: 4-byte LE attributes (7 = NV|BS|RT) + 8-byte LE value.
+chattr -i "$OS_INDICATIONS" 2>/dev/null || true
+printf '\x07\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00' >"$OS_INDICATIONS"
+
+echo "OsIndications EFI variable set. QSPI update will be applied on next reboot."
