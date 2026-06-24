@@ -47,6 +47,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install just
+        run: sudo apt-get update && sudo apt-get install -y just
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
@@ -71,25 +74,11 @@ jobs:
 
       - name: Create disk image
         run: |
-          truncate -s 10G "${{ inputs.disk-name }}.img"
-          sudo podman run \
-            --rm --privileged --pid=host \
-            --security-opt label=type:unconfined_t \
-            -e RUST_LOG=debug \
-            -v /dev:/dev \
-            -v /var/lib/containers:/var/lib/containers \
-            -v .:/output \
-            "docker.io/yeetypete/bootc-jetson:${{ inputs.image-tag }}" \
-            bootc install to-disk \
-              --composefs-backend \
-              --via-loopback "/output/${{ inputs.disk-name }}.img"
-
-      - name: Compress and checksum disk image
-        run: |
-          zstd -T0 -v \
-            -o "${{ inputs.disk-name }}.img.zst" "${{ inputs.disk-name }}.img"
-          sha256sum "${{ inputs.disk-name }}.img.zst" \
-            > "${{ inputs.disk-name }}.img.zst.sha256"
+          just \
+            image=docker.io/yeetypete/bootc-jetson \
+            tag='${{ inputs.image-tag }}' \
+            disk_name='${{ inputs.disk-name }}' \
+            dist
 
       - name: Upload disk image artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
