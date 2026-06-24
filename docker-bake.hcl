@@ -27,6 +27,15 @@ target "_common" {
     "type=docker,compression=zstd",
     "type=oci,dest=image.oci,compression=zstd",
   ]
+  attest = [
+    {
+      type = "provenance"
+      mode = "max"
+    },
+    {
+      type = "sbom"
+    }
+  ]
 }
 
 target "jetson-orin" {
