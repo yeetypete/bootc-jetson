@@ -28,47 +28,28 @@ jobs:
       - name: Run pre-commit hooks
         uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2
 
-  variants:
-    name: Get image variants
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    outputs:
-      list: ${{ steps.read.outputs.list }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-      - name: Read image variants
-        id: read
-        run: echo "list=$(jq -c . .github/image-variants.json)" >> "$GITHUB_OUTPUT"
-
   build:
     name: build
-    needs: variants
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.variants.outputs.list) }}
+        variant: [orin]
     permissions:
       contents: read
     uses: ./.github/workflows/build.yaml
     with:
-      bake-target: ${{ matrix.bake-target }}
-      image-tag: ${{ matrix.image-tag }}
-      disk-name: ${{ github.ref_type == 'tag' && format('{0}-{1}', matrix.disk-name, github.ref_name) || matrix.disk-name }}
+      variant: ${{ matrix.variant }}
       version: ${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
       revision: ${{ github.event.pull_request.head.sha || github.sha }}
 
   publish-image:
-    name: publish-image (${{ matrix.bake-target }})
+    name: publish-image (${{ matrix.variant }})
     if: github.ref_type == 'tag'
-    needs: [variants, build]
+    needs: build
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.variants.outputs.list) }}
+        variant: [orin]
     runs-on: ubuntu-24.04-arm
     environment: release
     permissions:
@@ -79,6 +60,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install just
+        run: sudo apt-get update && sudo apt-get install -y just
+
       - name: Login to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
@@ -88,18 +72,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
+      - name: Expose GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4
+
       - name: Push bootc container image
-        uses: docker/bake-action@6614cfa25eff9a0b2b2697efb0b6159e7680d584 # v7
-        with:
-          source: .
-          targets: ${{ matrix.bake-target }}
-          set: |
-            *.output=type=image,push=true,compression=zstd
-            *.cache-from=type=gha,scope=${{ matrix.bake-target }}
-            *.cache-to=type=gha,mode=max,scope=${{ matrix.bake-target }}
-        env:
-          VERSION: ${{ github.ref_name }}
-          REVISION: ${{ github.sha }}
+        run: |
+          just \
+            variant='${{ matrix.variant }}' \
+            version='${{ github.ref_name }}' \
+            revision='${{ github.sha }}' \
+            build \
+              --set '*.output=type=registry,compression=zstd' \
+              --set '*.cache-from=type=gha,scope=${{ matrix.variant }}' \
+              --set '*.cache-to=type=gha,mode=max,scope=${{ matrix.variant }}'
 
   release:
     name: release

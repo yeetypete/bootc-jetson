@@ -1,7 +1,0 @@
-[
-  {
-    "bake-target": "jetson-orin",
-    "disk-name": "bootc-jetson-orin",
-    "image-tag": "orin-jp7.2"
-  }
-]

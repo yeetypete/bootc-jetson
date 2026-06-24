@@ -18,20 +18,24 @@ group "default" {
 }
 
 target "_common" {
+  pull = true
   labels = {
     "org.opencontainers.image.version"  = trimprefix(VERSION, "v")
     "org.opencontainers.image.revision" = REVISION
   }
-  output = ["type=docker,compression=zstd"]
+  output = [
+    "type=docker,compression=zstd",
+    "type=oci,dest=image.oci,compression=zstd",
+  ]
 }
 
 target "jetson-orin" {
   inherits   = ["_common"]
-  dockerfile = "Dockerfile"
   context    = "./orin"
+  dockerfile = "Dockerfile"
   platforms  = ["linux/arm64"]
   tags = [
-    "${IMAGE}:orin-jp7.2-${trimprefix(VERSION, "v")}",
     "${IMAGE}:orin-jp7.2",
+    "${IMAGE}:orin-jp7.2-${trimprefix(VERSION, "v")}",
   ]
 }
