@@ -17,6 +17,10 @@
 # installed nvidia-l4t-bootloader deb version and the current is the ESRT
 # firmware version, compared exactly as nvidia-l4t-bootloader-utils'
 # auto_update_bootloader does.
+#
+# TODO: rewrite this in Rust so we can add tests and have more confidence in the
+# parsing logic.
+
 set -euo pipefail
 
 # JetPack 7 ships the firmware capsules inside the nvidia-l4t-bootloader
@@ -138,16 +142,73 @@ if [ "${capsule_status}" = "2" ] || [ "${capsule_status}" = "3" ]; then
     exit 1
 fi
 
-# Select the capsule for THIS board, following edk2-nvidia's PreIsoInstaller
-# table (README_PreIsoInstaller.md): for board 3767, "super" maps to
-# TEGRA_BL_3767_super.Cap, otherwise TEGRA_BL_3767.Cap. Skip unmapped boards
-# (flash via USB recovery with the NVIDIA L4T BSP).
-compatible=$(tr '\0' ' ' </proc/device-tree/compatible)
-case "$compatible" in
-*p3767*super*) capsule_name="TEGRA_BL_3767_super.Cap" ;; # Orin Nano/NX, Super
-*p3767*) capsule_name="TEGRA_BL_3767.Cap" ;;             # Orin Nano/NX
+# Select the capsule for THIS board, applying NVIDIA's own selector logic from
+# edk2-nvidia SelectCapsuleFile (L4TPreIsoInstaller.c): switch on board id, SKU
+# and FAB, plus a "super" check.
+#
+# NVIDIA's userspace equivalent (the nvidia-l4t-bootloader postinst) keys the
+# same decision off COMPATIBLE_SPEC in /etc/nv_boot_control.conf. We cannot use
+# that: nv_boot_control.conf is written by flash.sh at flash time, is not
+# shipped by any package, and bootc install never runs flash.sh, so the file
+# never exists here (and the service that maintains it, nv-l4t-bootloader-config,
+# is masked as composefs-incompatible). Instead we read the same board id/SKU/FAB
+# the bootloader publishes in the device tree, which survives a bootc install.
+#
+# /proc/device-tree/chosen/ids holds "<id>-<sku>-<fab>" per board (module and
+# carrier); pick the token whose id is a known Orin/Thor module.
+board_id=""
+board_sku=0
+board_fab=0
+ids_raw=$(tr '\0' ' ' </proc/device-tree/chosen/ids 2>/dev/null || true)
+for tok in $ids_raw; do
+    case "$tok" in
+    3701-* | 3767-* | 3834-*)
+        board_id="${tok%%-*}"
+        rest="${tok#*-}"
+        # 10# forces decimal so leading-zero fields (e.g. 0008) are not read as octal.
+        board_sku=$((10#${rest%%-*}))
+        board_fab=$((10#${rest#*-}))
+        break
+        ;;
+    esac
+done
+
+# "super" power profile, matching SelectCapsuleFile's IsOrinNanoSuper substring check.
+super=0
+case "$(tr '\0' ' ' </proc/device-tree/compatible 2>/dev/null)" in
+*super*) super=1 ;;
+esac
+
+case "$board_id" in
+3701) # AGX Orin
+    if [ "$board_sku" -eq 8 ]; then
+        capsule_name="TEGRA_BL_3701_agx_ind.Cap" # industrial
+    elif [ "$super" -eq 1 ]; then
+        capsule_name="TEGRA_BL_3701_agx_super.Cap"
+    elif [ "$board_sku" -eq 4 ] || [ "$board_sku" -eq 5 ]; then
+        capsule_name="TEGRA_BL_3701_agx.Cap"
+    elif [ "$board_sku" -eq 0 ]; then
+        if [ "$board_fab" -eq 300 ]; then
+            capsule_name="TEGRA_BL_3701_agx.Cap"
+        else
+            capsule_name="TEGRA_BL_3701_000.Cap"
+        fi
+    else
+        capsule_name="TEGRA_BL_3701_agx.Cap" # default
+    fi
+    ;;
+3767) # Orin Nano / Orin NX
+    if [ "$super" -eq 1 ]; then
+        capsule_name="TEGRA_BL_3767_super.Cap"
+    else
+        capsule_name="TEGRA_BL_3767.Cap"
+    fi
+    ;;
+3834) # AGX Thor
+    capsule_name="TEGRA_BL_3834_agx.Cap"
+    ;;
 *)
-    echo "No verified capsule mapping for this board (${compatible}); skipping." >&2
+    echo "No capsule mapping for board id '${board_id:-unknown}' (chosen/ids: ${ids_raw}); skipping." >&2
     echo "Flash QSPI manually via USB recovery with the NVIDIA L4T BSP" >&2
     echo "(Linux_for_Tegra/flash.sh) if an update is needed." >&2
     exit 0
