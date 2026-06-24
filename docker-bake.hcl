@@ -18,6 +18,7 @@ group "default" {
 }
 
 target "_common" {
+  pull = true
   labels = {
     "org.opencontainers.image.version"  = trimprefix(VERSION, "v")
     "org.opencontainers.image.revision" = REVISION
