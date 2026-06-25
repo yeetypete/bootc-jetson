@@ -8,4 +8,5 @@ with the jetson bootc images.
 
 - [`jetson-qspi-update`](crates/jetson-qspi-update): stages a QSPI firmware
   update via UEFI capsule-on-disk when the running firmware is older than the
-  version shipped in the bootc image.
+  version shipped in the bootc image. Run at boot by
+  `jetson-qspi-update.service`.
