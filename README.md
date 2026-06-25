@@ -8,7 +8,7 @@ Linux r39.2).
 > This repository is intended as a **reference example** of running `bootc` on
 > Jetson hardware, not as a base image that other projects consume directly.
 > Fork it and adapt the `Dockerfile` and `rootfs/` to your own needs rather than
-> depending on the published tags.
+> depending on the published bootc images in production.
 
 Support is currently limited to:
 
