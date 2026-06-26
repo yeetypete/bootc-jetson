@@ -52,8 +52,6 @@ const NANOE8GB_BOARD_NAME: &str = "jetson-orin-nanoe8gb-devkit";
 /// carries the board name we match for the Super and nanoe8gb sub-variants.
 #[must_use]
 pub fn parse_board(ids_raw: &str, compat_spec: &str) -> Option<Board> {
-    let is_super = is_super(compat_spec);
-    let is_nanoe8gb = compat_spec.contains(NANOE8GB_BOARD_NAME);
     ids_raw
         .split([' ', '\0', '\n', '\t'])
         .filter(|t| !t.is_empty())
@@ -66,8 +64,8 @@ pub fn parse_board(ids_raw: &str, compat_spec: &str) -> Option<Board> {
                 module,
                 sku,
                 fab,
-                is_super,
-                is_nanoe8gb,
+                is_super: is_super(compat_spec),
+                is_nanoe8gb: compat_spec.contains(NANOE8GB_BOARD_NAME),
             })
         })
 }
