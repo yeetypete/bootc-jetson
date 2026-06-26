@@ -1,0 +1,10 @@
+# Platform kernel args selected from the Thor DTB /chosen/bootargs (the args
+# NVIDIA's stock flash boots with). The EFI stub overrides the DTB bootargs with
+# the systemd-boot cmdline, so bootc must supply them here.
+kargs = [
+    "nvme.use_threaded_interrupts=1",
+    "tegra_keep_boot_clocks",
+    "clk_ignore_unused",
+    "pci=pcie_bus_perf",
+]
+match-architectures = ["aarch64"]
