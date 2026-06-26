@@ -41,9 +41,6 @@ fn main() -> ExitCode {
     }
 }
 
-/// Log to stderr at info by default, overridable with `RUST_LOG`. Under systemd
-/// the journal captures stderr, so we do not need a journald layer. Timestamps
-/// are off because the journal adds its own.
 fn init_tracing() {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
