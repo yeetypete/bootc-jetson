@@ -2,18 +2,34 @@
 //! id/SKU/FAB come from the device tree `chosen/ids`, and the Super and
 //! nanoe8gb sub-variants from the `TegraPlatformCompatSpec` UEFI variable.
 
+/// A Jetson module we map to a capsule, keyed on its device-tree board id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Module {
+    AgxOrin,  // 3701
+    OrinNano, // 3767, Orin Nano / NX
+    AgxThor,  // 3834
+}
+
+impl Module {
+    fn from_id(id: u32) -> Option<Self> {
+        match id {
+            3701 => Some(Self::AgxOrin),
+            3767 => Some(Self::OrinNano),
+            3834 => Some(Self::AgxThor),
+            _ => None,
+        }
+    }
+}
+
 /// Board identity, parsed from the device tree and the compat-spec variable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Board {
-    pub id: u32,
+    pub module: Module,
     pub sku: u32,
     pub fab: u32,
     pub is_super: bool,
     pub is_nanoe8gb: bool,
 }
-
-/// Module ids we know how to map to a capsule (Orin AGX, Orin Nano/NX, Thor AGX).
-const KNOWN_IDS: [u32; 3] = [3701, 3767, 3834];
 
 /// Board name the compat spec carries for the Orin Nano e 8GB, the only thing
 /// that sets it apart from the base Orin Nano. Mirrors edk2-nvidia's
@@ -33,14 +49,11 @@ pub fn parse_board(ids_raw: &str, compat_spec: &str) -> Option<Board> {
         .filter(|t| !t.is_empty())
         .find_map(|tok| {
             let mut parts = tok.split('-');
-            let id: u32 = parts.next()?.parse().ok()?;
-            if !KNOWN_IDS.contains(&id) {
-                return None;
-            }
+            let module = Module::from_id(parts.next()?.parse().ok()?)?;
             let sku: u32 = parts.next()?.parse().ok()?;
             let fab: u32 = parts.next()?.parse().ok()?;
             Some(Board {
-                id,
+                module,
                 sku,
                 fab,
                 is_super,
@@ -56,15 +69,14 @@ fn is_super(compat_spec: &str) -> bool {
 }
 
 /// Select the capsule filename for a board, mirroring `SelectCapsuleFile`.
-/// Returns `None` for a module id we have no mapping for.
 #[must_use]
-pub fn select_capsule(board: &Board) -> Option<&'static str> {
-    Some(match board.id {
-        3701 => {
-            // AGX Orin. Super wins over the SKU/FAB default, matching the
-            // firmware, which computes the default then lets a super profile
-            // override it. Industrial (sku 8) is its own image, and an early
-            // sku-0 board (FAB other than 300) takes the legacy capsule.
+pub fn select_capsule(board: &Board) -> &'static str {
+    match board.module {
+        Module::AgxOrin => {
+            // Super wins over the SKU/FAB default, matching the firmware, which
+            // computes the default then lets a super profile override it.
+            // Industrial (sku 8) is its own image, and an early sku-0 board (FAB
+            // other than 300) takes the legacy capsule.
             if board.is_super {
                 "TEGRA_BL_3701_agx_super.Cap"
             } else if board.sku == 8 {
@@ -75,17 +87,16 @@ pub fn select_capsule(board: &Board) -> Option<&'static str> {
                 "TEGRA_BL_3701_agx.Cap"
             }
         }
-        // Orin Nano / NX. nanoe8gb is its own image, set apart only by the
-        // compat spec board name. Mirrors `GetOrinNanoCapsuleFileName`.
-        3767 => match (board.is_nanoe8gb, board.is_super) {
+        // nanoe8gb is its own image, set apart only by the compat spec board
+        // name. Mirrors `GetOrinNanoCapsuleFileName`.
+        Module::OrinNano => match (board.is_nanoe8gb, board.is_super) {
             (true, true) => "TEGRA_BL_3767_nanoe8gb_super.Cap",
             (true, false) => "TEGRA_BL_3767_nanoe8gb.Cap",
             (false, true) => "TEGRA_BL_3767_super.Cap",
             (false, false) => "TEGRA_BL_3767.Cap",
         },
-        3834 => "TEGRA_BL_3834_agx.Cap", // AGX Thor
-        _ => return None,
-    })
+        Module::AgxThor => "TEGRA_BL_3834_agx.Cap",
+    }
 }
 
 #[cfg(test)]
@@ -93,7 +104,7 @@ mod tests {
     use super::*;
 
     fn select(ids: &str, compat: &str) -> Option<&'static str> {
-        select_capsule(&parse_board(ids, compat)?)
+        Some(select_capsule(&parse_board(ids, compat)?))
     }
 
     #[test]
@@ -228,7 +239,7 @@ mod tests {
     fn picks_module_token_not_carrier() {
         // Carrier 3768/3737 can come first, so we must skip to the module.
         let b = parse_board("3737-0000-500 3701-0005-400", "x").unwrap();
-        assert_eq!(b.id, 3701);
+        assert_eq!(b.module, Module::AgxOrin);
         assert_eq!(b.sku, 5);
     }
 
@@ -239,7 +250,7 @@ mod tests {
         assert_eq!(
             b,
             Board {
-                id: 3767,
+                module: Module::OrinNano,
                 sku: 5,
                 fab: 300,
                 is_super: true,
