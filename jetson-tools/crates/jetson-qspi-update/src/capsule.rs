@@ -2,6 +2,16 @@
 //! id/SKU/FAB come from the device tree `chosen/ids`, and the Super and
 //! nanoe8gb sub-variants from the `TegraPlatformCompatSpec` UEFI variable.
 
+use std::fs;
+use std::path::{Path, PathBuf};
+
+const DT_IDS: &str = "/proc/device-tree/chosen/ids";
+/// NVIDIA's compat-spec board name, under `gNVIDIAPublicVariableGuid`.
+const COMPAT_SPEC_VAR: &str =
+    "/sys/firmware/efi/efivars/TegraPlatformCompatSpec-781e084c-a330-417c-b678-38e696380cb9";
+/// Where the bootloader package ships the capsule payloads (nested per chip).
+pub const SEARCH_DIR: &str = "/opt/ota_package";
+
 /// A Jetson module we map to a capsule, keyed on its device-tree board id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Module {
@@ -96,6 +106,49 @@ pub fn select_capsule(board: &Board) -> &'static str {
             (false, false) => "TEGRA_BL_3767.Cap",
         },
         Module::AgxThor => "TEGRA_BL_3834_agx.Cap",
+    }
+}
+
+/// Read the running board's identity from the device tree and compat spec.
+#[must_use]
+pub fn read_board() -> Option<Board> {
+    let ids = fs::read(DT_IDS).ok()?;
+    let ids = String::from_utf8_lossy(&ids);
+    parse_board(&ids, &read_compat_spec().unwrap_or_default())
+}
+
+/// NVIDIA's compat-spec board name from its UEFI variable. The efivar is 4
+/// attribute bytes then the ASCII string, as the firmware reads it. Absent or
+/// unreadable yields the base (non-super, non-nanoe8gb) capsule, like the
+/// firmware's own default.
+fn read_compat_spec() -> Option<String> {
+    let bytes = fs::read(COMPAT_SPEC_VAR).ok()?;
+    let text = String::from_utf8_lossy(bytes.get(4..)?);
+    Some(text.trim_end_matches('\0').trim().to_string())
+}
+
+/// Locate the shipped capsule payload by name, the first match by sorted path.
+#[must_use]
+pub fn find(name: &str) -> Option<PathBuf> {
+    let mut matches = Vec::new();
+    collect_files(Path::new(SEARCH_DIR), name, &mut matches);
+    matches.sort();
+    matches.into_iter().next()
+}
+
+fn collect_files(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            collect_files(&entry.path(), name, out);
+        } else if entry.file_name() == name {
+            out.push(entry.path());
+        }
     }
 }
 

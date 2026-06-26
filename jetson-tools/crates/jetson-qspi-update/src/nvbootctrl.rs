@@ -1,6 +1,18 @@
 //! Parsing of `nvbootctrl dump-slots-info`, used to tell whether a previously
 //! staged capsule was applied or failed.
 
+use std::process::Command;
+
+/// Read the capsule update status by running `nvbootctrl dump-slots-info`.
+#[must_use]
+pub fn read_capsule_status() -> Option<CapsuleStatus> {
+    let out = Command::new("nvbootctrl")
+        .arg("dump-slots-info")
+        .output()
+        .ok()?;
+    parse_capsule_status(&String::from_utf8_lossy(&out.stdout))
+}
+
 /// Capsule update status reported by nvbootctrl.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapsuleStatus {
