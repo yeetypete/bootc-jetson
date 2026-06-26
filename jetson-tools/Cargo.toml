@@ -10,6 +10,7 @@ repository = "https://github.com/yeetypete/bootc-jetson"
 
 [workspace.dependencies]
 anyhow = "1"
+clap = { version = "4", features = ["derive"] }
 rustix = { version = "1", features = ["mount", "fs"] }
 
 [workspace.lints.rust]
