@@ -3,6 +3,37 @@
 //! Versions are compared as the decimal value of `0xRRRRMMmm`
 //! (Release, Major, minor), the same encoding the ESRT exposes.
 
+use std::process::Command;
+
+/// Deb package that ships the QSPI bootloader firmware.
+pub const BL_PACKAGE: &str = "nvidia-l4t-bootloader";
+const ESRT_FW_VERSION: &str = "/sys/firmware/efi/esrt/entries/entry0/fw_version";
+
+/// Target version, from the installed bootloader package.
+#[must_use]
+pub fn read_target() -> Option<u32> {
+    let out = Command::new("dpkg-query")
+        .args(["-W", "-f", "${Version}", BL_PACKAGE])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    parse_deb_version(raw).ok()
+}
+
+/// Current version, from the ESRT firmware entry.
+#[must_use]
+pub fn read_current() -> Option<u32> {
+    let raw = std::fs::read_to_string(ESRT_FW_VERSION).ok()?;
+    parse_esrt_version(&raw).ok()
+}
+
 /// Encode a `rel.maj.min` triple as the ESRT does, `(rel<<16)|(maj<<8)|min`.
 #[must_use]
 pub fn encode(rel: u32, maj: u32, min: u32) -> u32 {
@@ -18,9 +49,9 @@ pub fn encode(rel: u32, maj: u32, min: u32) -> u32 {
 pub fn parse_deb_version(installed: &str) -> anyhow::Result<u32> {
     let upstream = installed.split('-').next().unwrap_or("");
     let mut fields = upstream.split('.');
-    let rel = field(fields.next(), installed)?;
-    let maj = field(fields.next(), installed)?;
-    let min = field(fields.next(), installed)?;
+    let rel = parse_field(fields.next(), installed)?;
+    let maj = parse_field(fields.next(), installed)?;
+    let min = parse_field(fields.next(), installed)?;
     Ok(encode(rel, maj, min))
 }
 
@@ -34,7 +65,7 @@ pub fn parse_esrt_version(raw: &str) -> anyhow::Result<u32> {
         .map_err(|_| anyhow::anyhow!("ESRT fw_version is not a number: {raw:?}"))
 }
 
-fn field(value: Option<&str>, full: &str) -> anyhow::Result<u32> {
+fn parse_field(value: Option<&str>, full: &str) -> anyhow::Result<u32> {
     value
         .and_then(|v| v.parse().ok())
         .ok_or_else(|| anyhow::anyhow!("malformed bootloader version: {full:?}"))
