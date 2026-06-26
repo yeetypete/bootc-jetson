@@ -73,6 +73,36 @@ RUN git init && \
     make bin install-all DESTDIR=${DESTDIR} CARGO_FEATURES=rhel9
 
 
+# Build jetson-tools (jetson-qspi-update)
+FROM ubuntu:24.04 AS jetson-tools-builder
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+ARG RUST_VERSION=1.96.0
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates \
+    curl \
+    gcc \
+    libc6-dev
+
+RUN bash -c 'set -euo pipefail; curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --no-modify-path --profile minimal --default-toolchain ${RUST_VERSION}'
+
+WORKDIR /tools
+# hadolint ignore=DL3022
+COPY --from=jetson-tools . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/tools/target,sharing=locked \
+    cargo build --release --locked --bin jetson-qspi-update && \
+    install -D -m 0755 target/release/jetson-qspi-update \
+    /out/usr/libexec/jetson-qspi-update
+
+
 # Custom kernel building EROFS + FS_VERITY in, which bootc's composefs+verity
 # backend needs at boot. nvidia-l4t-kernel ships them disabled. OOT modules are
 # rebuilt against it below.
@@ -256,6 +286,9 @@ COPY --from=kernel-builder /out/boot/Image /boot/Image
 COPY --from=kernel-builder /out/lib/modules/${KERNEL_RELEASE}/ /usr/lib/modules/${KERNEL_RELEASE}/
 
 COPY rootfs/ /
+
+# Install jetson-tools
+COPY --from=jetson-tools-builder /out/usr/ /usr/
 
 # Bake the NVIDIA GPU/display driver setup at build time. The nvidia-l4t-init load
 # services do this at boot but write to read-only /usr, so we replicate their work
