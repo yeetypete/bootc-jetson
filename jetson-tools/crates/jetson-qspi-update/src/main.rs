@@ -114,20 +114,14 @@ fn run(opts: &Opts) -> Result<ExitCode> {
     }
 
     let Some(board) = read_board() else {
-        println!("Could not read board identity from the device tree. Skipping.");
-        return Ok(ExitCode::SUCCESS);
-    };
-    let Some(capsule_name) = capsule::select_capsule(&board) else {
-        println!(
-            "No capsule mapping for board id {} (sku {}, fab {}). Skipping.",
-            board.id, board.sku, board.fab
-        );
+        println!("No supported Jetson module in the device tree. Skipping.");
         println!("{MANUAL_FLASH_HINT}");
         return Ok(ExitCode::SUCCESS);
     };
+    let capsule_name = capsule::select_capsule(&board);
     println!(
-        "Board id {} sku {} fab {} super={} -> {capsule_name}",
-        board.id, board.sku, board.fab, board.is_super
+        "Board {:?} sku {} fab {} super={} nanoe8gb={} -> {capsule_name}",
+        board.module, board.sku, board.fab, board.is_super, board.is_nanoe8gb
     );
 
     let Some(capsule_file) = find_capsule(Path::new(CAPSULE_SEARCH_DIR), capsule_name) else {
