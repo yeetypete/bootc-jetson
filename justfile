@@ -37,6 +37,7 @@ disk:
         {{ image }}:{{ tag }} \
         bootc install to-disk \
             --source-imgref oci-archive:/output/{{ oci_archive }}:{{ tag }} \
+            --target-imgref docker.io/{{ image }}:{{ tag }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
