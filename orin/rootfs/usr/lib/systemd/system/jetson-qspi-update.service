@@ -1,0 +1,15 @@
+[Unit]
+Description=Stage Jetson QSPI firmware update via UEFI capsule
+ConditionPathExists=/sys/firmware/efi/esrt/entries/entry0/fw_version
+ConditionDirectoryNotEmpty=/opt/ota_package
+# Discovers and transiently mounts the ESP itself. Only needs local block
+# devices and efivarfs available.
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/jetson-qspi-update
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
