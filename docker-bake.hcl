@@ -68,6 +68,9 @@ target "jetson-thor" {
   context    = "./thor"
   dockerfile = "Dockerfile"
   platforms  = ["linux/arm64"]
+  contexts = {
+    jetson-tools = "./jetson-tools"
+  }
   tags = [
     "${IMAGE}:thor-jp7.2",
     "${IMAGE}:thor-jp7.2-${trimprefix(VERSION, "v")}",
