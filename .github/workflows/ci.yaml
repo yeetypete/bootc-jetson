@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [orin]
+        variant: [orin, thor]
     permissions:
       contents: read
     uses: ./.github/workflows/build.yaml
@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [orin]
+        variant: [orin, thor]
     runs-on: ubuntu-24.04-arm
     environment: release
     permissions:

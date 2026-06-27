@@ -1,8 +1,9 @@
 # bootc-jetson
 
-A [bootc](https://bootc-dev.github.io/bootc/) base image for NVIDIA Jetson Orin,
-running [JetPack 7.2](https://developer.nvidia.com/embedded/jetpack) (Jetson
-Linux r39.2).
+A [bootc](https://bootc-dev.github.io/bootc/) base image for NVIDIA Jetson Orin
+and Jetson Thor, running
+[JetPack 7.2](https://developer.nvidia.com/embedded/jetpack) (Jetson Linux
+r39.2).
 
 > [!WARNING]
 > This repository is intended as a **reference example** of running `bootc` on
@@ -13,8 +14,7 @@ Linux r39.2).
 Support is currently limited to:
 
 - **JetPack 7.2 only** (Jetson Linux r39.2).
-- **Jetson Orin only** (AGX Orin, Orin NX, Orin Nano). Jetson Thor support is planned
-  for a later release.
+- **Jetson Orin** (AGX Orin, Orin NX, Orin Nano) and **Jetson Thor** (AGX Thor).
 
 ## What's in the image
 
@@ -32,14 +32,14 @@ Support is currently limited to:
 
 ## Requirements
 
-- A Jetson Orin developer kit or module, with its boot firmware already at
-  JetPack 7.2 (see [Provisioning a Jetson Orin](#provisioning-a-jetson-orin)).
+- A Jetson Orin or Jetson Thor developer kit or module, with its boot firmware
+  already at JetPack 7.2 (see [Provisioning a Jetson](#provisioning-a-jetson)).
 - A Linux host with [`just`](https://github.com/casey/just) and `zstd` to flash
   a release build (see [Option 1](#option-1-flash-a-release-build)).
 - Only for [building locally](#option-2-build-locally): an `arm64` host with
   [Docker](https://docs.docker.com/) installed.
 
-## Provisioning a Jetson Orin
+## Provisioning a Jetson
 
 > [!IMPORTANT]
 > The bootc image only manages the root filesystem on disk. The device's boot
@@ -48,14 +48,18 @@ Support is currently limited to:
 >
 > - [Jetson AGX Orin Developer Kit - BSP Installation](https://docs.nvidia.com/jetson/agx-orin-devkit/user-guide/latest/setup_bsp.html)
 > - [Jetson Orin Nano Developer Kit - BSP Setup](https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/setup_bsp.html)
+> - [Jetson AGX Thor Developer Kit - JetPack SDK Setup](https://docs.nvidia.com/jetson/agx-thor-devkit/user-guide/latest/setup_jetpack.html)
+
+The examples below use the `orin` variant. Substitute `thor` (and pass
+`variant=thor` to `just`) for a Jetson Thor.
 
 ### Option 1: flash a release build
 
 Download the latest `bootc-jetson-orin-<version>.img.zst` and its matching
 `bootc-jetson-orin-<version>.img.zst.sha256` from the
-[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) page.
-Verify and decompress it, then write it to your Jetson's root filesystem
-device (e.g. an SSD):
+[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) page
+(or the `bootc-jetson-thor-*` files for a Thor). Verify and decompress it, then
+write it to your Jetson's root filesystem device (e.g. an SSD):
 
 ```bash
 sha256sum -c bootc-jetson-orin*.img.zst.sha256
@@ -76,6 +80,11 @@ write the image.
 just build  # Build the Jetson bootc image (OCI archive).
 just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
+
+# Or, for a Jetson Thor:
+just variant=thor build
+just variant=thor disk
+just variant=thor flash
 ```
 
 Once booted, the system updates transactionally with `bootc upgrade`, which

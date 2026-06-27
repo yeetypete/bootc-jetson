@@ -1,0 +1,5 @@
+[install]
+bootloader = "systemd"
+
+[install.filesystem.root]
+type = "ext4"

@@ -1,0 +1,24 @@
+# Bring up the NVIDIA openrm GPU/display stack (Thor / tegra264).
+#
+# udev autoloads nvidia by PCI modalias when the GPU enumerates, before the
+# platform is ready, so that probe fails and the GPU stays unbound. We blacklist
+# the modalias autoload (nvidia-defer-autoload.conf) and load the stack here
+# instead, once the platform is up during multi-user.target. (We can't use
+# NVIDIA's nv-load-display-modules.service directly. Its `depmod -a` writes
+# read-only /usr on bootc, so the depmod.d/modprobe.d configs and depmod are
+# baked at build time instead.)
+#
+# modprobe nvidia_drm pulls nvidia_modeset + nvidia (modules.dep), and nvidia
+# pulls nv_gpu_static_pg (softdep pre) + nvidia_uvm (softdep post).
+[Unit]
+Description=Load NVIDIA openrm GPU/display modules after platform init
+After=systemd-modules-load.service
+Before=display-manager.service nvpmodel.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe nvidia_drm
+
+[Install]
+WantedBy=multi-user.target
