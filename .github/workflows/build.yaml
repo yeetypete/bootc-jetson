@@ -15,6 +15,11 @@ on:
         description: "Git commit SHA for image labels."
         type: string
         required: true
+      push:
+        description: "Push images to the registry (only on releases)."
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
@@ -22,6 +27,7 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-24.04-arm
+    environment: ${{ inputs.push && 'release' || '' }}
     permissions:
       contents: read
     steps:
@@ -55,12 +61,20 @@ jobs:
       - name: Expose GitHub Runtime
         uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4
 
+      - name: Login to Docker Hub
+        if: ${{ inputs.push }}
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build bootc container image
         run: |
           just \
             variant='${{ inputs.variant }}' \
             version='${{ inputs.version }}' \
             revision='${{ inputs.revision }}' \
+            push='${{ inputs.push }}' \
             build \
               --set '*.cache-from=type=gha,scope=${{ inputs.variant }}' \
               --set '*.cache-to=type=gha,mode=max,scope=${{ inputs.variant }}'
