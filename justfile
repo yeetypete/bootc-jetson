@@ -10,6 +10,8 @@ revision := `git rev-parse HEAD 2>/dev/null || echo ""`
 jetpack := "7.2"
 # Variant to build, e.g. `just variant=orin dist`. Each name is the variant's build dir.
 variant := "orin"
+# Whether `build` also pushes images to the registry (set push=true on releases).
+push := "false"
 
 target := "jetson-" + variant
 tag := variant + "-jp" + jetpack
@@ -23,7 +25,7 @@ default:
 
 # Build the bootc container image.
 build *args:
-    IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} \
+    IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} PUSH={{ push }} \
         docker buildx bake {{ target }} {{ args }}
 
 # Convert the built image into a flashable raw disk image via bootc install to-disk.

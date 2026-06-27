@@ -13,6 +13,11 @@ variable "REVISION" {
   default     = ""
 }
 
+variable "PUSH" {
+  description = "Also push images to the registry (in addition to the local OCI archive)."
+  default     = false
+}
+
 group "default" {
   targets = ["jetson-orin", "jetson-thor"]
 }
@@ -23,7 +28,13 @@ target "_common" {
     "org.opencontainers.image.version"  = trimprefix(VERSION, "v")
     "org.opencontainers.image.revision" = REVISION
   }
-  output = [
+  # On release we emit the registry push and the local OCI archive from the same
+  # build so they share a manifest digest.
+  output = PUSH ? [
+    "type=docker,compression=zstd",
+    "type=oci,dest=image.oci,compression=zstd",
+    "type=registry,compression=zstd",
+    ] : [
     "type=docker,compression=zstd",
     "type=oci,dest=image.oci,compression=zstd",
   ]

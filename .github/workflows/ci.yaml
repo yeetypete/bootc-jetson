@@ -41,65 +41,13 @@ jobs:
       variant: ${{ matrix.variant }}
       version: ${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
       revision: ${{ github.event.pull_request.head.sha || github.sha }}
-
-  publish-image:
-    name: publish-image (${{ matrix.variant }})
-    if: github.ref_type == 'tag'
-    needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [orin, thor]
-    runs-on: ubuntu-24.04-arm
-    environment: release
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-
-      - name: Install just
-        run: sudo apt-get update && sudo apt-get install -y just
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker
-        uses: docker/setup-docker-action@0234bb73ccb40f0c430b795634f9247e2b5c2d23 # v5
-        with:
-          daemon-config: |
-            {
-              "features": {
-                "containerd-snapshotter": true
-              }
-            }
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
-
-      - name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4
-
-      - name: Push bootc container image
-        run: |
-          just \
-            variant='${{ matrix.variant }}' \
-            version='${{ github.ref_name }}' \
-            revision='${{ github.sha }}' \
-            build \
-              --set '*.output=type=registry,compression=zstd' \
-              --set '*.cache-from=type=gha,scope=${{ matrix.variant }}' \
-              --set '*.cache-to=type=gha,mode=max,scope=${{ matrix.variant }}'
+      push: ${{ github.ref_type == 'tag' }}
+    secrets: inherit
 
   release:
     name: release
     if: github.ref_type == 'tag'
-    needs: [build, publish-image]
+    needs: build
     runs-on: ubuntu-24.04
     environment: release
     permissions:
