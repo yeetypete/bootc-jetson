@@ -311,17 +311,24 @@ RUN systemctl enable \
     # nv-l4t-bootloader-config.service is not bootc-aware (runs lsblk on the
     # composefs root). On Thor it is safe to mask, since UEFI and nvbootctrl read
     # board identity from EEPROM directly.
+    #
+    # nvpmodel.service applies the default power mode (120W) at boot. On Thor any
+    # mode change requires a rebootwhich nvpmodel cannot persist on bootc's read-only
+    # /opt, so the service fails. Mask it.
     rm -f \
-    /etc/systemd/system/nv-load-display-modules.service \
-    /etc/systemd/system/nv-load-gpu-libs.service \
+    /etc/systemd/system/multi-user.target.wants/nv-l4t-bootloader-config.service \
+    /etc/systemd/system/multi-user.target.wants/nvpmodel.service \
     /etc/systemd/system/nv-graphics.service \
     /etc/systemd/system/nv-l4t-bootloader-config.service \
-    /etc/systemd/system/multi-user.target.wants/nv-l4t-bootloader-config.service && \
+    /etc/systemd/system/nv-load-display-modules.service \
+    /etc/systemd/system/nv-load-gpu-libs.service \
+    /etc/systemd/system/nvpmodel.service  && \
     systemctl mask \
+    nv-graphics.service \
+    nv-l4t-bootloader-config.service \
     nv-load-display-modules.service \
     nv-load-gpu-libs.service \
-    nv-graphics.service \
-    nv-l4t-bootloader-config.service
+    nvpmodel.service
 
 # Create home directory on first login and configure the ubuntu user. Drop the
 # pam_lastlog.so line, since the module is gone from Ubuntu 24.04 and fails to dlopen.
