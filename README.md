@@ -48,7 +48,7 @@ Support is currently limited to:
 >
 > - [Jetson AGX Orin Developer Kit - BSP Installation](https://docs.nvidia.com/jetson/agx-orin-devkit/user-guide/latest/setup_bsp.html)
 > - [Jetson Orin Nano Developer Kit - BSP Setup](https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/setup_bsp.html)
-> - [Jetson AGX Thor Developer Kit - JetPack SDK Setup](https://docs.nvidia.com/jetson/agx-thor-devkit/user-guide/latest/setup_jetpack.html)
+> - [Jetson AGX Thor Developer Kit - BSP Setup](https://docs.nvidia.com/jetson/agx-thor-devkit/user-guide/latest/setup_bsp.html)
 
 The examples below use the `orin` variant. Substitute `thor` (and pass
 `variant=thor` to `just`) for a Jetson Thor.
