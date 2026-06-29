@@ -1,0 +1,18 @@
+[package]
+name = "jetson-qspi-update"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Stage Jetson QSPI firmware updates via UEFI capsule-on-disk."
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

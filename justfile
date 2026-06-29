@@ -23,6 +23,15 @@ oci_archive := "image.oci"
 default:
     @just --list
 
+# Check formatting and lint the jetson-tools Rust workspace.
+check:
+    cd jetson-tools && cargo fmt --check
+    cd jetson-tools && cargo clippy --all-targets --locked -- -D warnings
+
+# Run the jetson-tools Rust workspace tests.
+test:
+    cd jetson-tools && cargo test --locked
+
 # Build the bootc container image.
 build *args:
     IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} PUSH={{ push }} \
