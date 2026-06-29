@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::Parser;
-use tracing::{error, info};
+use tracing::error;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 
@@ -44,8 +44,6 @@ fn init_tracing() {
         .init();
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn run(_cli: &Cli) -> Result<ExitCode> {
-    info!("jetson-qspi-update is not yet implemented!");
-    Ok(ExitCode::FAILURE)
+    anyhow::bail!("jetson-qspi-update is not yet implemented")
 }
