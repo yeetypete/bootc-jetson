@@ -12,6 +12,7 @@ repository = "https://github.com/yeetypete/bootc-jetson"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 rustix = { version = "1", features = ["mount", "fs"] }
+semver = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
