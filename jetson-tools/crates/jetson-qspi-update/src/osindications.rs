@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rustix::fs::{IFlags, ioctl_getflags, ioctl_setflags};
+use tracing::debug;
 
 /// EFI global variable GUID, the namespace `OsIndications` lives in.
 pub const EFI_GLOBAL_GUID: &str = "8be4df61-93ca-11d2-aa0d-00e098032b8c";
@@ -19,22 +20,16 @@ fn path() -> PathBuf {
     Path::new(EFIVARS_DIR).join(format!("OsIndications-{EFI_GLOBAL_GUID}"))
 }
 
-/// True if a capsule-on-disk request from a prior boot is still pending, i.e.
-/// UEFI has not consumed it.
-#[must_use]
-pub fn is_pending() -> bool {
-    std::fs::read(path()).is_ok_and(|bytes| is_capsule_pending(&bytes))
-}
-
 /// Request capsule processing on next boot. efivarfs marks existing variables
-/// immutable, so clear that first (a new one has nothing to clear, hence best
-/// effort).
+/// immutable, so clear that first.
 ///
 /// # Errors
 /// Fails if the variable cannot be written.
 pub fn request() -> Result<()> {
     let path = path();
-    let _ = clear_immutable(&path);
+    if let Err(e) = clear_immutable(&path) {
+        debug!("clearing immutable flag on {} failed: {e}", path.display());
+    }
     std::fs::write(&path, REQUEST_CAPSULE)
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(())
@@ -60,39 +55,15 @@ pub const REQUEST_CAPSULE: [u8; 12] = [
     0x00, 0x00, 0x00, 0x00, // value high 4 bytes
 ];
 
-/// True if the capsule-delivery bit is still set, i.e. a request is pending.
-/// UEFI clears it once it consumes the request, so a still-set bit on a later
-/// boot means a staged capsule was never processed.
-#[must_use]
-pub fn is_capsule_pending(bytes: &[u8]) -> bool {
-    // Bit 2 lives in the value's low byte, at offset 4 (after the attributes).
-    bytes.get(4).is_some_and(|b| b & 0x04 != 0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn request_payload_is_pending() {
-        assert!(is_capsule_pending(&REQUEST_CAPSULE));
-    }
-
-    #[test]
-    fn cleared_value_is_not_pending() {
-        let cleared = [0x07, 0, 0, 0, 0x00, 0, 0, 0, 0, 0, 0, 0];
-        assert!(!is_capsule_pending(&cleared));
-    }
-
-    #[test]
-    fn other_bits_do_not_count() {
-        let other = [0x07, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0];
-        assert!(!is_capsule_pending(&other));
-    }
-
-    #[test]
-    fn short_or_empty_is_not_pending() {
-        assert!(!is_capsule_pending(&[]));
-        assert!(!is_capsule_pending(&[0x07, 0, 0, 0]));
+    fn request_payload_sets_only_the_capsule_bit() {
+        // Bit 2 of the value (byte 4, after the 4 attribute bytes) requests
+        // capsule-on-disk; no other value bit is set.
+        assert_eq!(REQUEST_CAPSULE[4], 0x04);
+        assert_eq!(&REQUEST_CAPSULE[5..], &[0u8; 7]);
     }
 }

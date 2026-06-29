@@ -1,9 +1,9 @@
 //! Stage a Jetson QSPI firmware update via UEFI capsule-on-disk when the
 //! running firmware is older than the one shipped in this image.
 //!
-//! Idempotent per boot. Up to date or freshly staged exits 0. A capsule staged
-//! on a prior boot that UEFI never applied exits non-zero, so a stuck update
-//! surfaces as a failed unit instead of re-staging forever.
+//! Idempotent per boot. Up to date or freshly staged exits 0. If UEFI's ESRT
+//! reports that it already attempted a capsule for this target and failed, the
+//! unit exits non-zero rather than re-staging into the same failure.
 
 use std::process::ExitCode;
 
@@ -13,8 +13,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 
-use jetson_qspi_update::nvbootctrl::CapsuleStatus;
-use jetson_qspi_update::{capsule, esp, nvbootctrl, osindications, version};
+use jetson_qspi_update::{capsule, esp, osindications, version};
 
 const MANUAL_FLASH_HINT: &str =
     "Flash QSPI via USB recovery with the NVIDIA L4T BSP (Linux_for_Tegra/flash.sh).";
@@ -74,28 +73,22 @@ fn run(cli: &Cli) -> Result<ExitCode> {
     }
     info!("QSPI firmware update needed: {current} -> {target}");
 
-    // A capsule attempted on a prior boot while firmware is still old means a
-    // stuck update: surface it below rather than re-staging silently.
-    let status = nvbootctrl::read_capsule_status();
-    info!(
-        "capsule update status (nvbootctrl): {}",
-        status.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"))
-    );
-
-    if osindications::is_pending() {
-        error!(
-            "a capsule was staged on a previous boot but UEFI has not consumed it \
-             (OsIndications still set, firmware still {current}). Capsule-on-disk is \
-             not applying on this device. {MANUAL_FLASH_HINT}"
+    // UEFI records the outcome of the last capsule it processed in the ESRT. If
+    // it already attempted this target (or newer) and the attempt failed,
+    // re-staging would only repeat the failure, so surface it as a failed unit.
+    if let Some(last) = version::read_last_attempt() {
+        info!(
+            "last capsule attempt version={} status={}",
+            last.version, last.status
         );
-        return Ok(ExitCode::FAILURE);
-    }
-    if status.is_some_and(CapsuleStatus::is_failure) {
-        error!(
-            "UEFI attempted the capsule but firmware is still {current} (nvbootctrl \
-             capsule status {status:?}). The QSPI update failed. {MANUAL_FLASH_HINT}"
-        );
-        return Ok(ExitCode::FAILURE);
+        if last.version >= target && last.failed() {
+            error!(
+                "UEFI attempted a capsule for {} but it failed (ESRT last_attempt_status \
+                 {}). Firmware is still {current}. {MANUAL_FLASH_HINT}",
+                last.version, last.status
+            );
+            return Ok(ExitCode::FAILURE);
+        }
     }
 
     let Some(board) = capsule::read_board() else {

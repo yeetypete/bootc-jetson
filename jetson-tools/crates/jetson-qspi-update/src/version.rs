@@ -12,7 +12,12 @@ use anyhow::{Context, Result};
 
 /// Deb package that ships the QSPI bootloader firmware.
 pub const BL_PACKAGE: &str = "nvidia-l4t-bootloader";
+
+const ESRT_ENTRY: &str = "/sys/firmware/efi/esrt/entries/entry0";
 const ESRT_FW_VERSION: &str = "/sys/firmware/efi/esrt/entries/entry0/fw_version";
+
+/// UEFI `LAST_ATTEMPT_STATUS_SUCCESS`; any other code is a failure.
+pub const LAST_ATTEMPT_SUCCESS: u32 = 0;
 
 /// A firmware version as a `rel.maj.min` triple. Ordering is field by field
 /// (release, then major, then minor), matching firmware version precedence.
@@ -60,6 +65,38 @@ pub fn read_target() -> Option<Version> {
 pub fn read_current() -> Option<Version> {
     let raw = std::fs::read_to_string(ESRT_FW_VERSION).ok()?;
     parse_esrt_version(&raw).ok()
+}
+
+/// UEFI's record of the last capsule update it attempted: the firmware version
+/// it tried and the result code it reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LastAttempt {
+    pub version: Version,
+    pub status: u32,
+}
+
+impl LastAttempt {
+    /// Whether the last attempt failed (any non-success status).
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        self.status != LAST_ATTEMPT_SUCCESS
+    }
+}
+
+/// The ESRT's record of the last capsule attempt, which UEFI populates after it
+/// processes a capsule. `None` if the entry is absent or unreadable.
+#[must_use]
+pub fn read_last_attempt() -> Option<LastAttempt> {
+    let dir = std::path::Path::new(ESRT_ENTRY);
+    let version =
+        parse_esrt_version(&std::fs::read_to_string(dir.join("last_attempt_version")).ok()?)
+            .ok()?;
+    let status = std::fs::read_to_string(dir.join("last_attempt_status"))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(LastAttempt { version, status })
 }
 
 /// Parse the installed `nvidia-l4t-bootloader` deb version. Takes the upstream

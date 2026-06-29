@@ -9,6 +9,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use rustix::mount::{MountFlags, UnmountFlags, mount, unmount};
+use tracing::{debug, warn};
 
 /// Label bootc assigns the ESP at install.
 pub const LABEL: &str = "EFI-SYSTEM";
@@ -63,7 +64,10 @@ impl Mount {
 
 impl Drop for Mount {
     fn drop(&mut self) {
-        let _ = unmount(&self.path, UnmountFlags::empty());
-        let _ = fs::remove_dir(&self.path);
+        if let Err(e) = unmount(&self.path, UnmountFlags::empty()) {
+            warn!("unmounting {} failed: {e}", self.path.display());
+        } else if let Err(e) = fs::remove_dir(&self.path) {
+            debug!("removing mountpoint {} failed: {e}", self.path.display());
+        }
     }
 }
