@@ -28,8 +28,33 @@ jobs:
       - name: Run pre-commit hooks
         uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2
 
+  jetson-tools:
+    name: Test jetson-tools
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        working-directory: jetson-tools
+        run: rustup toolchain install
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: jetson-tools
+      - name: Install just
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y just
+      - name: Check
+        run: just check
+      - name: Test
+        run: just test
+
   build:
     name: build
+    needs: [pre-commit, jetson-tools]
     strategy:
       fail-fast: false
       matrix:

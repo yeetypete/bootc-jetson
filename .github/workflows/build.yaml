@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Install just
-        run: sudo apt-get update && sudo apt-get install -y just
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y just
 
       - name: Set up Docker
         uses: docker/setup-docker-action@0234bb73ccb40f0c430b795634f9247e2b5c2d23 # v5
