@@ -134,8 +134,7 @@ fn read_compat_spec() -> Option<String> {
 pub fn find(name: &str) -> Option<PathBuf> {
     let mut matches = Vec::new();
     collect_files(Path::new(SEARCH_DIR), name, &mut matches);
-    matches.sort();
-    matches.into_iter().next()
+    matches.into_iter().min()
 }
 
 fn collect_files(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
