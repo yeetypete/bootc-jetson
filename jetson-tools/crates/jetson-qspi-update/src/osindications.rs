@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn request_payload_sets_only_the_capsule_bit() {
         // Bit 2 of the value (byte 4, after the 4 attribute bytes) requests
-        // capsule-on-disk; no other value bit is set.
+        // capsule-on-disk. No other value bit is set.
         assert_eq!(REQUEST_CAPSULE[4], 0x04);
         assert_eq!(&REQUEST_CAPSULE[5..], &[0u8; 7]);
     }

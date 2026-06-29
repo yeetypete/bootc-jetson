@@ -76,27 +76,31 @@ fn is_super(compat_spec: &str) -> bool {
     compat_spec.contains("super")
 }
 
-/// Select the capsule filename for a board, mirroring `SelectCapsuleFile`.
+/// Select the capsule filename for a board, mirroring the
+/// `compare_specs_to_select_payloads` dispatch in the `nvidia-l4t-bootloader`
+/// deb's postinst maintainer script.
 #[must_use]
 pub fn select_capsule(board: &Board) -> &'static str {
     match board.module {
         Module::AgxOrin => {
             // Super wins over the SKU/FAB default, matching the firmware, which
             // computes the default then lets a super profile override it.
-            // Industrial (sku 8) is its own image, and an early sku-0 board (FAB
-            // other than 300) takes the legacy capsule.
+            // Industrial (sku 8) is its own image. An early sku-0 board (FAB
+            // below 300) takes the legacy capsule. FAB 300 and up use the
+            // standard one. Mirrors `select_3701_payload` in the `nvidia-l4t-bootloader`
+            // postinst.
             if board.is_super {
                 "TEGRA_BL_3701_agx_super.Cap"
             } else if board.sku == 8 {
                 "TEGRA_BL_3701_agx_ind.Cap" // industrial
-            } else if board.sku == 0 && board.fab != 300 {
+            } else if board.sku == 0 && board.fab < 300 {
                 "TEGRA_BL_3701_000.Cap"
             } else {
                 "TEGRA_BL_3701_agx.Cap"
             }
         }
         // nanoe8gb is its own image, set apart only by the compat spec board
-        // name. Mirrors `GetOrinNanoCapsuleFileName`.
+        // name. Mirrors `select_3767_payload` in the `nvidia-l4t-bootloader` postinst.
         Module::OrinNano => match (board.is_nanoe8gb, board.is_super) {
             (true, true) => "TEGRA_BL_3767_nanoe8gb_super.Cap",
             (true, false) => "TEGRA_BL_3767_nanoe8gb.Cap",
@@ -163,7 +167,7 @@ mod tests {
         assert_eq!(
             select(
                 "3767-0005-300 3768-0000-400",
-                "3767-0005-300--1--jetson-orin-nano-devkit-super-"
+                "3767--0005--1--jetson-orin-nano-devkit-super-"
             ),
             Some("TEGRA_BL_3767_super.Cap")
         );
@@ -174,7 +178,7 @@ mod tests {
         assert_eq!(
             select(
                 "3767-0000-500 3768-0000-400",
-                "3767-0000-500--1--jetson-orin-nano-devkit-"
+                "3767--0000--1--jetson-orin-nano-devkit-"
             ),
             Some("TEGRA_BL_3767.Cap")
         );
@@ -185,7 +189,7 @@ mod tests {
         assert_eq!(
             select(
                 "3767-0000-500 3768-0000-400",
-                "3767-0000-500--1--jetson-orin-nanoe8gb-devkit-"
+                "3767--0000--1--jetson-orin-nanoe8gb-devkit-"
             ),
             Some("TEGRA_BL_3767_nanoe8gb.Cap")
         );
@@ -196,7 +200,7 @@ mod tests {
         assert_eq!(
             select(
                 "3767-0000-500 3768-0000-400",
-                "3767-0000-500--1--jetson-orin-nanoe8gb-devkit-super-"
+                "3767--0000--1--jetson-orin-nanoe8gb-devkit-super-"
             ),
             Some("TEGRA_BL_3767_nanoe8gb_super.Cap")
         );
@@ -207,7 +211,7 @@ mod tests {
         assert_eq!(
             select(
                 "3701-0005-400 3737-0000-500",
-                "3701-0005-400--1--jetson-agx-orin-devkit-"
+                "3701--0005--1--jetson-agx-orin-devkit-"
             ),
             Some("TEGRA_BL_3701_agx.Cap")
         );
@@ -218,7 +222,7 @@ mod tests {
         assert_eq!(
             select(
                 "3701-0000-400 3737-0000-500",
-                "3701-0000-400--1--jetson-agx-orin-devkit-super-"
+                "3701--0000--1--jetson-agx-orin-devkit-super-"
             ),
             Some("TEGRA_BL_3701_agx_super.Cap")
         );
@@ -229,7 +233,7 @@ mod tests {
         assert_eq!(
             select(
                 "3701-0008-400 3737-0000-500",
-                "3701-0008-400--1--jetson-agx-orin-devkit-industrial-"
+                "3701--0008--1--jetson-agx-orin-devkit-industrial-"
             ),
             Some("TEGRA_BL_3701_agx_ind.Cap")
         );
@@ -241,31 +245,45 @@ mod tests {
         assert_eq!(
             select(
                 "3701-0008-400 3737-0000-500",
-                "3701-0008-400--1--jetson-agx-orin-devkit-super-"
+                "3701--0008--1--jetson-agx-orin-devkit-super-"
             ),
             Some("TEGRA_BL_3701_agx_super.Cap")
         );
     }
 
     #[test]
+    fn agx_orin_sku0_early_fab() {
+        // FAB below 300 is an early board that takes the legacy capsule.
+        assert_eq!(
+            select(
+                "3701-0000-200 3737-0000-500",
+                "3701--0000--1--jetson-agx-orin-devkit-"
+            ),
+            Some("TEGRA_BL_3701_000.Cap")
+        );
+    }
+
+    #[test]
     fn agx_orin_sku0_fab300() {
+        // FAB 300 and up use the standard capsule.
         assert_eq!(
             select(
                 "3701-0000-300 3737-0000-500",
-                "3701-0000-300--1--jetson-agx-orin-devkit-"
+                "3701--0000--1--jetson-agx-orin-devkit-"
             ),
             Some("TEGRA_BL_3701_agx.Cap")
         );
     }
 
     #[test]
-    fn agx_orin_sku0_other_fab() {
+    fn agx_orin_sku0_late_fab() {
+        // FAB above 300 also uses the standard capsule, not the legacy one.
         assert_eq!(
             select(
                 "3701-0000-400 3737-0000-500",
-                "3701-0000-400--1--jetson-agx-orin-devkit-"
+                "3701--0000--1--jetson-agx-orin-devkit-"
             ),
-            Some("TEGRA_BL_3701_000.Cap")
+            Some("TEGRA_BL_3701_agx.Cap")
         );
     }
 
@@ -274,7 +292,7 @@ mod tests {
         assert_eq!(
             select(
                 "3834-0008-400 4071-0000-500",
-                "3834-0008-400--1--jetson-agx-thor-devkit-"
+                "3834--0008--1--jetson-agx-thor-devkit-"
             ),
             Some("TEGRA_BL_3834_agx.Cap")
         );
