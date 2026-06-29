@@ -2,7 +2,7 @@
 
 Rust workspace for Jetson host-side utilities. These utilities work across
 Jetson bootc image variants (e.g. Orin, Thor). They are distributed together
-with the image.
+with the jetson bootc images.
 
 ## Crates
 
