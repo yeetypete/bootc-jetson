@@ -31,11 +31,11 @@ target "_common" {
   # On release we emit the registry push and the local OCI archive from the same
   # build so they share a manifest digest.
   output = PUSH ? [
-    "type=docker,compression=zstd",
+    "type=docker,compression=zstd,oci-mediatypes=true",
     "type=oci,dest=image.oci,compression=zstd",
-    "type=registry,compression=zstd",
+    "type=registry,compression=zstd,oci-mediatypes=true",
     ] : [
-    "type=docker,compression=zstd",
+    "type=docker,compression=zstd,oci-mediatypes=true",
     "type=oci,dest=image.oci,compression=zstd",
   ]
   attest = [
