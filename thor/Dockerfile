@@ -299,6 +299,7 @@ RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 RUN systemctl enable \
     nvidia-display-load.service \
     ssh.service \
+    systemd-growfs@sysroot.service \
     systemd-networkd.service \
     systemd-resolved.service \
     systemd-timesyncd.service \
