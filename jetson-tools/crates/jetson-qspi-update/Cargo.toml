@@ -11,6 +11,8 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+rustix.workspace = true
+semver.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
