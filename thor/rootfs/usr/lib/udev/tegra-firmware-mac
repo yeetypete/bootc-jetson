@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# Assign a firmware-provided MAC address to a Realtek NIC.
+#
+# The r8126 driver only reads the address from the NIC's own EEPROM, which is
+# blank on the EverFocus EAR100T, so it falls back to a random address that
+# changes every boot. UEFI publishes the board EEPROM's addresses in the device
+# tree, so use those instead.
+#
+# Usage: tegra-firmware-mac <interface>
+
+set -eu
+
+iface="${1:?usage: tegra-firmware-mac <interface>}"
+
+# The PCIe controller the NIC sits behind decides which address it gets.
+case "$(basename "$(readlink -f "/sys/class/net/${iface}/device")")" in
+    0002:*) index=0 ;;
+    0003:*) index=1 ;;
+    *) exit 0 ;;
+esac
+
+mac_file="/proc/device-tree/chosen/nvidia,ether-mac${index}"
+[ -r "${mac_file}" ] || exit 0
+mac="$(tr -d '\0' <"${mac_file}")"
+
+/usr/sbin/ip link set dev "${iface}" address "${mac}"
