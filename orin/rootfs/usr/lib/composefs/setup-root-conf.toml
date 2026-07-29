@@ -1,5 +1,13 @@
 # composefs-native backend mount configuration, read by bootc-root-setup.service
 # in the initramfs (see crates/initramfs in bootc).
+#
+# Follows the transient-root example in bootc's
+# docs/src/man/bootc-setup-root-conf.5.md. /etc takes mount = "root" instead of
+# its own transient overlay because the kernel caps overlayfs stacking at 2
+# (FILESYSTEM_MAX_STACK_DEPTH), which composefs plus transient root already hit.
+
+[root]
+transient = true
 
 [etc]
-transient = true
+mount = "root"
