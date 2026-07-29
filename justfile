@@ -12,6 +12,10 @@ jetpack := "7.2"
 variant := "orin"
 # Whether `build` also pushes images to the registry (set push=true on releases).
 push := "false"
+# L4T release the `bsp-*` recipes download and flash.
+l4t_version := "39.2.0"
+# Linux_for_Tegra tree the `bsp-*` recipes act on.
+bsp_dir := justfile_directory() / "bsp/l4t" / l4t_version / "Linux_for_Tegra"
 
 target := "jetson-" + variant
 tag := variant + "-jp" + jetpack
@@ -63,6 +67,23 @@ dist: disk compress
 # Write a disk image to an external storage device.
 flash image=(disk_name + ".img"):
     scripts/flash.sh {{ image }}
+
+# Download and extract the stock L4T BSP into bsp/l4t.
+bsp-download:
+    @bsp/download.sh {{ l4t_version }}
+
+# Apply the EAR100T board delta to the BSP tree (see bsp/ear100t).
+bsp-patch: bsp-download
+    bsp/ear100t/apply.sh "{{ bsp_dir }}"
+
+# Flash the EAR100T's QSPI boot firmware only (board must be in USB recovery mode).
+bsp-flash: bsp-patch
+    # flash.sh requires a root device positional, but ignores it under --qspi-only.
+    cd "{{ bsp_dir }}" && sudo ./flash.sh --qspi-only ear100t internal
+
+# Remove the downloaded and extracted L4T BSP.
+bsp-clean:
+    rm -rf bsp/l4t
 
 # Remove generated disk images and the OCI archive.
 clean:
