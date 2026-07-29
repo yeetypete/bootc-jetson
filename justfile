@@ -72,7 +72,7 @@ flash image=(disk_name + ".img"):
 bsp-prereqs:
     bsp/prereqs.sh
 
-# Download and extract the stock L4T BSP into bsp/l4t.
+# Download and extract the stock L4T BSP and its root filesystem into bsp/l4t.
 bsp-download:
     @bsp/download.sh {{ l4t_version }}
 
@@ -80,8 +80,9 @@ bsp-download:
 bsp-patch: bsp-download
     bsp/ear100t/apply.sh "{{ bsp_dir }}"
 
+# NO_RECOVERY_IMG skips an image absent from the QSPI layout whose ramdisk needs a
+# DSA host key, which OpenSSH no longer generates.
 # Flash the EAR100T's QSPI boot firmware only (board must be in USB recovery mode).
-# NO_RECOVERY_IMG skips a recovery image that needs a sample rootfs and is not in the QSPI layout.
 bsp-flash: bsp-patch
     cd "{{ bsp_dir }}" && \
       sudo NO_RECOVERY_IMG=1 \

@@ -4,11 +4,13 @@
 #
 # The EAR100T is an AGX Thor Devkit derivative: it reports the devkit's board ID,
 # compatible string and model, and reuses NVIDIA's devkit board config.
-# Only the follwoing differ:
+# Only the following differ:
 #
 #   1. QSPI drive strength  - 1X where the devkit uses 2X (6 pins)
 #   2. UPHY lane allocation - ODMDATA config 6 instead of the devkit lane file
 #   3. Device tree          - PCIe C3 enabled (second NIC), MGBE 0-3 disabled
+#
+# Steps 4 and 5 are not board differences, they work around bugs in the stock BSP.
 #
 # Usage: apply.sh <Linux_for_Tegra-dir>
 
@@ -32,6 +34,9 @@ stock_conf="p3834-0008-p4071-0000-nvme.conf"
 stock_dtb="kernel/dtb/${dtb_stem}-nv.dtb"
 stock_dtsi="bootloader/${pinmux_stem}.dtsi"
 stock_pinmux_dts="bootloader/generic/BCT/${pinmux_stem}.dts"
+flash_script="tools/kernel_flash/l4t_initrd_flash_internal.sh"
+utils_script="unified_flash/tools/flashtools/bootburn_t264_py/flash_utilities.py"
+anchor_marker="# EAR100T: anchor the flashing tool names to their directory"
 
 out_conf="${board}.conf"
 out_dtb="kernel/dtb/${dtb_stem}-${board}.dtb"
@@ -39,7 +44,7 @@ out_dtsi="bootloader/${pinmux_stem}-${board}.dtsi"
 out_pinmux_dts="bootloader/generic/BCT/${pinmux_stem}-${board}.dts"
 
 for f in flash.sh "${stock_conf}" "${stock_dtb}" "${stock_dtsi}" \
-    "${stock_pinmux_dts}"; do
+    "${stock_pinmux_dts}" "${flash_script}" "${utils_script}"; do
     [ -f "${f}" ] || fail "${ldk_dir} is not an L4T r39.2 BSP tree, missing ${f}"
 done
 command -v fdtput >/dev/null \
@@ -89,11 +94,55 @@ UPHY_CONFIG="";
 ODMDATA="uphy0-config-6,pcie@3_status=okay";
 EOF
 
+# 4. Flash script fix. The unified flash path T264 invokes tegrarcm_v2 and
+# its siblings by bare name, which the nested sudo's secure_path cannot resolve.
+# shellcheck disable=SC2016 # literal shell source, must not expand here
+stock_invocation='sudo python3 "${FLASH_EXEC}"'
+# shellcheck disable=SC2016
+patched_invocation='sudo env PATH="${bsp_images_dir}/tools/flashtools/flash:${PATH}" python3 "${FLASH_EXEC}"'
+
+if grep -qF "${patched_invocation}" "${flash_script}"; then
+    patch_state="already patched"
+else
+    [ "$(grep -cF "${stock_invocation}" "${flash_script}")" -eq 1 ] \
+        || fail "expected 1 stock flash invocation in ${flash_script}"
+    sed -i "s|${stock_invocation}|${patched_invocation}|" "${flash_script}"
+    grep -qF "${patched_invocation}" "${flash_script}" \
+        || fail "failed to patch ${flash_script}"
+    patch_state="patched"
+fi
+
+# 5. Flash tool paths. Those names are only anchored to the tools directory when
+# isPDK is set, which miniPDK flashing does not set, so anchor them on import.
+if grep -qF "${anchor_marker}" "${utils_script}"; then
+    anchor_state="already patched"
+else
+    cat >>"${utils_script}" <<EOF
+
+${anchor_marker}
+_flash_dir = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "flash"))
+for _name, _value in list(vars(flash_utilities).items()):
+    if not _name.startswith("f_"):
+        continue
+    if isinstance(_value, str):
+        setattr(flash_utilities, _name, os.path.join(_flash_dir, _value))
+    elif isinstance(_value, list):
+        setattr(flash_utilities, _name,
+                [os.path.join(_flash_dir, _v) for _v in _value])
+EOF
+    python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "${utils_script}" \
+        || fail "patching ${utils_script} produced invalid Python"
+    anchor_state="patched"
+fi
+
 echo "Applied the EAR100T delta to ${ldk_dir}"
 printf '  %s\n' "${out_conf}" "${out_dtb}" "${out_dtsi}" "${out_pinmux_dts}"
+printf '  %s (%s)\n' "${flash_script}" "${patch_state}"
+printf '  %s (%s)\n' "${utils_script}" "${anchor_state}"
 echo
 echo "Install flashing prerequisites, once per host:"
-echo "  sudo ${ldk_dir}/tools/l4t_flash_prerequisites.sh"
+echo "  just bsp-prereqs"
 echo
 echo "Flash QSPI boot firmware only (board must be in USB recovery mode):"
 echo "  just bsp-flash"
