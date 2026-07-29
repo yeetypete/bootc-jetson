@@ -81,9 +81,11 @@ bsp-patch: bsp-download
     bsp/ear100t/apply.sh "{{ bsp_dir }}"
 
 # Flash the EAR100T's QSPI boot firmware only (board must be in USB recovery mode).
+# NO_RECOVERY_IMG skips a recovery image that needs a sample rootfs and is not in the QSPI layout.
 bsp-flash: bsp-patch
     cd "{{ bsp_dir }}" && \
-      sudo ./tools/kernel_flash/l4t_initrd_flash.sh --qspi-only ear100t mmcblk0p1
+      sudo NO_RECOVERY_IMG=1 \
+        ./tools/kernel_flash/l4t_initrd_flash.sh --qspi-only ear100t mmcblk0p1
 
 # Remove the downloaded and extracted L4T BSP.
 bsp-clean:
