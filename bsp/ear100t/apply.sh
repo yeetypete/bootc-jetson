@@ -8,7 +8,7 @@
 #
 #   1. QSPI drive strength  - 1X where the devkit uses 2X (6 pins)
 #   2. UPHY lane allocation - ODMDATA config 6 instead of the devkit lane file
-#   3. Device tree          - PCIe C3 enabled (second NIC), MGBE 0-3 disabled
+#   3. Device tree          - PCIe C3 on, MGBE 0-3 and INA238 off
 #
 # Steps 4 and 5 are not board differences, they work around bugs in the stock BSP.
 #
@@ -75,6 +75,8 @@ fdtput -t s "${out_dtb}" "/bus@0/pcie@a808440000" status "okay"
 for mac in a808a10000 a808b10000 a808d10000 a808e10000; do
     fdtput -t s "${out_dtb}" "/bus@0/ethernet@${mac}" status "disabled"
 done
+# The devkit's INA238 power monitor is unpopulated here, so its probe fails.
+fdtput -t s "${out_dtb}" "/bus@0/i2c@c600000/ina238@44" status "disabled"
 
 # 3. Board config. Sources the stock devkit conf, then overrides only what the
 #    EAR100T changes.
