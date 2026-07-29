@@ -7,10 +7,10 @@ lives in QSPI boot firmware, which is flashed separately with NVIDIA's L4T BSP.
 ## Requirements
 
 - An Ubuntu x86_64 host, connected to the board's USB recovery port.
-- Run the following to install all the prerequisites for flashing:
+- Run the following once per host to install the flashing prerequisites:
 
   ```bash
-  sudo "$(just bsp-download)/tools/l4t_flash_prerequisites.sh"
+  just bsp-prereqs
   ```
 
 ## Flashing

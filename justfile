@@ -68,6 +68,10 @@ dist: disk compress
 flash image=(disk_name + ".img"):
     scripts/flash.sh {{ image }}
 
+# Install the host packages needed for flashing (once per host).
+bsp-prereqs:
+    bsp/prereqs.sh
+
 # Download and extract the stock L4T BSP into bsp/l4t.
 bsp-download:
     @bsp/download.sh {{ l4t_version }}
@@ -78,8 +82,8 @@ bsp-patch: bsp-download
 
 # Flash the EAR100T's QSPI boot firmware only (board must be in USB recovery mode).
 bsp-flash: bsp-patch
-    # flash.sh requires a root device positional, but ignores it under --qspi-only.
-    cd "{{ bsp_dir }}" && sudo ./flash.sh --qspi-only ear100t internal
+    cd "{{ bsp_dir }}" && \
+      sudo ./tools/kernel_flash/l4t_initrd_flash.sh --qspi-only ear100t mmcblk0p1
 
 # Remove the downloaded and extracted L4T BSP.
 bsp-clean:
