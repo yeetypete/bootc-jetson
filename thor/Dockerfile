@@ -207,6 +207,7 @@ ARG KERNEL_RELEASE=6.8.12-1021-tegra
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
+    avahi-daemon \
     bubblewrap \
     dosfstools \
     dracut \
@@ -214,6 +215,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     efibootmgr \
     fdisk \
     less \
+    libnss-mdns \
     nvidia-l4t-3d-core \
     nvidia-l4t-bootloader \
     nvidia-l4t-camera \
@@ -297,6 +299,7 @@ RUN rm -rf /boot /srv /home /root /usr/local /mnt && \
 RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 RUN systemctl enable \
+    avahi-daemon.service \
     nvidia-display-load.service \
     ssh.service \
     systemd-growfs@sysroot.service \
