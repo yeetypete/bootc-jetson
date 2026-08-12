@@ -1,0 +1,4 @@
+# The EAR100T's Realtek NICs ship with a blank MAC EEPROM, so take the address
+# UEFI published in the device tree. No-op on boards without these NICs.
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="r8126", \
+    RUN+="/usr/lib/udev/tegra-firmware-mac $env{INTERFACE}"
