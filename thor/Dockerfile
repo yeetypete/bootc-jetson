@@ -73,7 +73,6 @@ RUN git init && \
     make bin install-all DESTDIR=${DESTDIR} CARGO_FEATURES=rhel9
 
 
-# Built on bookworm so the binary links against a glibc no newer than Ubuntu 24.04's.
 FROM rust:1.98-bookworm AS bootc-imagectl
 
 ARG BOOTC_IMAGECTL_REV=f54932ea30b8a4189fe6099b30eac38f1746be6f
@@ -92,13 +91,11 @@ COPY --from=bootc-builder /out/usr/ /usr/
 COPY --from=bootc-builder /out/etc/ /etc/
 RUN ldconfig
 
-# The apt pin keeps initramfs-tools out, since finalize builds the initramfs with
-# dracut. /etc/resolv.conf must be a symlink before the first RUN, because docker
-# bind-mounts a regular one and finalize cannot remove a mount.
+# /etc/resolv.conf must be a symlink before the first RUN. Docker bind-mounts a
+# regular one, which finalize cannot remove.
 COPY rootfs/etc/ /etc/
 
-# Create every user and group with the UID and GID the sysusers lock file fixes,
-# before any package can allocate a different one.
+# Create users and groups with the lock file's IDs.
 COPY rootfs/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -242,9 +239,6 @@ RUN pam-auth-update --enable mkhomedir && \
 
 LABEL containers.bootc=1
 
-# Lay out the filesystem, fix the accounts, stage the kernel, build the initramfs,
-# relocate the dpkg database under /usr, empty /var into tmpfiles.d entries and
-# lint the result.
 COPY --from=bootc-imagectl /out/bin/bootc-imagectl /usr/libexec/bootc-imagectl
 RUN /usr/libexec/bootc-imagectl finalize \
     --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf
