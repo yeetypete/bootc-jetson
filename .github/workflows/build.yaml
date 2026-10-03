@@ -27,7 +27,7 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-24.04-arm
-    environment: ${{ inputs.release && 'release' || '' }}
+    environment: release
     permissions:
       contents: read
     steps:
