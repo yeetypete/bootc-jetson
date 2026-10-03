@@ -163,16 +163,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 COPY rootfs/ /
 
-# Bake the NVIDIA GPU/display driver setup at build time. The nv-load-* services
-# do this at boot but write to read-only /usr, so we replicate their work
-# here and mask them below. Orin is tegra234 -> nvgpu variant.
-ARG GPU_VARIANT=nvgpu-l4t
-ARG GPU_LIB=nvgpu
-RUN cfgdir=/opt/nvidia/nv-disp-module-configs; \
-    libdir="/opt/nvidia/l4t-gpu-libs/${GPU_LIB}"; \
-    cp "${cfgdir}/nv-depmod-${GPU_VARIANT}-display.conf" /etc/depmod.d/nvidia-display.conf; \
-    cp "${cfgdir}/nv-modprobe-${GPU_VARIANT}-display.conf" /etc/modprobe.d/nvidia-display.conf; \
-    install -d /usr/lib/aarch64-linux-gnu /etc/ld.so.conf.d; \
+# Replicate the masked nv-load-gpu-libs.service, which writes to read-only /usr.
+# Orin (tegra234) uses nvgpu.
+RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu; \
     ln -sfnT "$libdir/libcuda.so" /usr/lib/aarch64-linux-gnu/libcuda.so; \
     ln -sfnT "$libdir/libcuda.so.1" /usr/lib/aarch64-linux-gnu/libcuda.so.1; \
     echo "$libdir" > /etc/ld.so.conf.d/000-nvidia-gpu-libs.conf
