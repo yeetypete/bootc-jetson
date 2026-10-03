@@ -10,11 +10,16 @@ revision := `git rev-parse HEAD 2>/dev/null || echo ""`
 jetpack := "7.2"
 # Variant to build, e.g. `just variant=orin dist`. Each name is the variant's build dir.
 variant := "orin"
-# Whether `build` also pushes images to the registry (set push=true on releases).
+# Whether `build` also pushes images to the registry.
 push := "false"
+# Whether `build` tags the image as a release (see docker-bake.hcl).
+release := "false"
 
 target := "jetson-" + variant
+# The mutable tag installed systems follow with `bootc upgrade`.
 tag := variant + "-jp" + jetpack
+# The tag `build` gives the image, per the tagging scheme in docker-bake.hcl.
+build_tag := if release == "true" { tag } else if revision == "" { tag } else { tag + "-" + replace_regex(revision, '^(.{7}).*$', '$1') }
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
@@ -34,8 +39,8 @@ test:
 
 # Build the bootc container image.
 build *args:
-    IMAGE={{ image }} VERSION={{ version }} REVISION={{ revision }} PUSH={{ push }} \
-        docker buildx bake {{ target }} {{ args }}
+    REPOSITORY={{ image }} VERSION={{ version }} REVISION={{ revision }} JETPACK={{ jetpack }} \
+        PUSH={{ push }} RELEASE={{ release }} docker buildx bake {{ target }} {{ args }}
 
 # Convert the built image into a flashable raw disk image via bootc install to-disk.
 disk:
@@ -45,9 +50,9 @@ disk:
         --security-opt label=disable \
         -v /dev:/dev \
         -v "$PWD:/output" \
-        {{ image }}:{{ tag }} \
+        {{ image }}:{{ build_tag }} \
         bootc install to-disk \
-            --source-imgref oci-archive:/output/{{ oci_archive }}:{{ tag }} \
+            --source-imgref oci-archive:/output/{{ oci_archive }}:{{ build_tag }} \
             --target-imgref docker.io/{{ image }}:{{ tag }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
