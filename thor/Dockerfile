@@ -160,6 +160,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     whois \
     xfsprogs \
     zstd && \
+    # Canonical's iGPU defaults blacklist the GPU modules and leave loading to
+    # the nv-load-* services, which are masked below.
     rm -f /etc/modprobe.d/tegra-igpu-jetson-defaults_nvidia-display_nvidia-tegra.conf
 
 COPY rootfs/ /
