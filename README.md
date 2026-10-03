@@ -15,6 +15,7 @@ Support is currently limited to:
 
 - **JetPack 7.2 only** (Jetson Linux r39.2).
 - **Jetson Orin** (AGX Orin, Orin NX, Orin Nano) and **Jetson Thor** (AGX Thor).
+  One image boots on both and selects the GPU driver stack for the SoC at boot.
 
 ## What's in the image
 
@@ -50,20 +51,17 @@ Support is currently limited to:
 > - [Jetson Orin Nano Developer Kit - BSP Setup](https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/setup_bsp.html)
 > - [Jetson AGX Thor Developer Kit - BSP Setup](https://docs.nvidia.com/jetson/agx-thor-devkit/user-guide/latest/setup_bsp.html)
 
-The examples below use the `orin` variant. Substitute `thor` (and pass
-`variant=thor` to `just`) for a Jetson Thor.
-
 ### Option 1: flash a release build
 
-Download the latest `bootc-jetson-orin-<version>.img.zst` and its matching
-`bootc-jetson-orin-<version>.img.zst.sha256` from the
-[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) page
-(or the `bootc-jetson-thor-*` files for a Thor). Verify and decompress it, then
-write it to your Jetson's root filesystem device (e.g. an SSD):
+Download the latest `bootc-jetson.img.zst` and its matching
+`bootc-jetson.img.zst.sha256` from the
+[GitHub releases](https://github.com/yeetypete/bootc-jetson/releases) page.
+Verify and decompress it, then write it to your Jetson's root filesystem device
+(e.g. an SSD):
 
 ```bash
-sha256sum -c bootc-jetson-orin*.img.zst.sha256
-zstd -d bootc-jetson-orin*.img.zst -o bootc-jetson-orin.img
+sha256sum -c bootc-jetson.img.zst.sha256
+zstd -d bootc-jetson.img.zst -o bootc-jetson.img
 
 just flash
 ```
@@ -80,11 +78,6 @@ write the image.
 just build  # Build the Jetson bootc image (OCI archive).
 just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
-
-# Or, for a Jetson Thor:
-just variant=thor build
-just variant=thor disk
-just variant=thor flash
 ```
 
 Once booted, the system updates transactionally with `bootc upgrade`, which

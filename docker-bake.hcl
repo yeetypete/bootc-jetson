@@ -19,7 +19,7 @@ variable "PUSH" {
 }
 
 group "default" {
-  targets = ["jetson-orin", "jetson-thor"]
+  targets = ["jetson"]
 }
 
 target "_common" {
@@ -49,24 +49,13 @@ target "_common" {
   ]
 }
 
-target "jetson-orin" {
+target "jetson" {
   inherits   = ["_common"]
-  context    = "./orin"
+  context    = "./image"
   dockerfile = "Dockerfile"
   platforms  = ["linux/arm64"]
   tags = [
-    "${IMAGE}:orin-jp7.2",
-    "${IMAGE}:orin-jp7.2-${trimprefix(VERSION, "v")}",
-  ]
-}
-
-target "jetson-thor" {
-  inherits   = ["_common"]
-  context    = "./thor"
-  dockerfile = "Dockerfile"
-  platforms  = ["linux/arm64"]
-  tags = [
-    "${IMAGE}:thor-jp7.2",
-    "${IMAGE}:thor-jp7.2-${trimprefix(VERSION, "v")}",
+    "${IMAGE}:jp7.2",
+    "${IMAGE}:jp7.2-${trimprefix(VERSION, "v")}",
   ]
 }

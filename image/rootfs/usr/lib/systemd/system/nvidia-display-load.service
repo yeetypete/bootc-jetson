@@ -1,0 +1,23 @@
+# Bring up the NVIDIA GPU/display stack: openrm on Thor (tegra264), nvgpu on
+# Orin (tegra234). jetson-gpu-select.service picks the stack before this runs.
+#
+# udev autoloads nvidia by PCI modalias before the platform is ready, so the
+# probe fails. nvidia-defer-autoload.conf blacklists that autoload and this unit
+# loads the stack during multi-user.target instead. It replaces NVIDIA's
+# nv-load-display-modules.service, whose `depmod -a` writes read-only /usr.
+#
+# nvidia_drm pulls in nvidia_modeset and nvidia. On Thor the install rule in
+# nvidia-display.conf loads nv_gpu_static_pg before nvidia and nvidia_uvm after.
+# On Orin the rules in modprobe-nvgpu.conf load nvgpu first.
+[Unit]
+Description=Load NVIDIA GPU/display modules after platform init
+After=systemd-modules-load.service
+Before=display-manager.service nvpmodel.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe nvidia_drm
+
+[Install]
+WantedBy=multi-user.target

@@ -6,16 +6,14 @@ image := "yeetypete/bootc-jetson"
 version := "v0.0.0"
 # Git commit SHA for image labels.
 revision := `git rev-parse HEAD 2>/dev/null || echo ""`
-# JetPack release these images target.
+# JetPack release the image targets.
 jetpack := "7.2"
-# Variant to build, e.g. `just variant=orin dist`. Each name is the variant's build dir.
-variant := "orin"
 # Whether `build` also pushes images to the registry (set push=true on releases).
 push := "false"
 
-target := "jetson-" + variant
-tag := variant + "-jp" + jetpack
-disk_name := "bootc-jetson-" + variant
+target := "jetson"
+tag := "jp" + jetpack
+disk_name := "bootc-jetson"
 disk_size := "10G"
 oci_archive := "image.oci"
 

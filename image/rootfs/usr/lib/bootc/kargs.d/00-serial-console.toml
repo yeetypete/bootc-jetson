@@ -1,0 +1,4 @@
+# Orin's serial console is ttyTCU0 and Thor's is ttyUTC0. The kernel skips the
+# one the SoC lacks, and the last one present becomes /dev/console.
+kargs = ["console=tty0", "console=ttyTCU0,115200", "console=ttyUTC0,115200"]
+match-architectures = ["aarch64"]

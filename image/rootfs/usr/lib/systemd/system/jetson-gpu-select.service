@@ -1,0 +1,15 @@
+# Runs before ldconfig.service, which would otherwise drop the CUDA libraries
+# from the ld.so cache while /run/nvidia-gpu-libs is missing.
+[Unit]
+Description=Select the NVIDIA iGPU driver stack for this SoC
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target ldconfig.service systemd-udev-trigger.service nvidia-display-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/jetson-gpu-select
+
+[Install]
+WantedBy=sysinit.target

@@ -55,15 +55,10 @@ jobs:
   build:
     name: build
     needs: [pre-commit, jetson-tools]
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [orin, thor]
     permissions:
       contents: read
     uses: ./.github/workflows/build.yaml
     with:
-      variant: ${{ matrix.variant }}
       version: ${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
       revision: ${{ github.event.pull_request.head.sha || github.sha }}
       push: ${{ github.ref_type == 'tag' }}
@@ -86,9 +81,8 @@ jobs:
       - name: Download disk image artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: disk-image-*
+          name: disk-image
           path: disk-image
-          merge-multiple: true
 
       - name: Create release
         env:

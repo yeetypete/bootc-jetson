@@ -1,0 +1,16 @@
+#!/bin/sh
+# Select the iGPU driver stack for the SoC this image booted on. Orin (tegra234)
+# uses nvgpu and Thor (tegra264) uses openrm. /usr is read-only, so the choice
+# is made through links in /run.
+set -eu
+
+if tr '\0' '\n' < /proc/device-tree/compatible | grep -qx 'nvidia,tegra234'; then
+    variant=nvgpu
+    mkdir -p /run/modprobe.d
+    ln -sf /usr/lib/bootc-jetson/modprobe-nvgpu.conf /run/modprobe.d/nvidia-display.conf
+else
+    variant=openrm
+fi
+
+# The ld.so cache and the libcuda links in /usr resolve through this link.
+ln -sfnT "/opt/nvidia/l4t-gpu-libs/${variant}" /run/nvidia-gpu-libs
