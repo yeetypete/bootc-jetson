@@ -1,6 +1,11 @@
+# syntax=docker/dockerfile:1
 # hadolint global ignore=DL3008,DL3059
 
-FROM ubuntu:24.04 AS bootc-builder
+ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60
+ARG RUST_IMAGE=docker.io/library/rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
+
+
+FROM ${UBUNTU_IMAGE} AS bootc-builder
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -73,7 +78,7 @@ RUN git init && \
     make bin install-all DESTDIR=${DESTDIR} CARGO_FEATURES=rhel9
 
 
-FROM rust:1.98-bookworm AS bootc-imagectl
+FROM ${RUST_IMAGE} AS bootc-imagectl
 
 ARG BOOTC_IMAGECTL_REV=f54932ea30b8a4189fe6099b30eac38f1746be6f
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
@@ -81,7 +86,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --git https://github.com/yeetypete/bootc-imagectl --rev "${BOOTC_IMAGECTL_REV}" \
     bootc-imagectl
 
-FROM ubuntu:24.04
+FROM ${UBUNTU_IMAGE} AS image
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -229,6 +234,7 @@ RUN pam-auth-update --enable mkhomedir && \
     chmod 440 /etc/sudoers.d/ubuntu
 
 LABEL containers.bootc=1
+CMD ["/sbin/init"]
 
 COPY --from=bootc-imagectl /out/bin/bootc-imagectl /usr/libexec/bootc-imagectl
 RUN /usr/libexec/bootc-imagectl finalize \
