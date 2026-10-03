@@ -1,0 +1,4 @@
+Explanation: bootc-imagectl finalize builds the initramfs with dracut.
+Package: initramfs-tools*
+Pin: release *
+Pin-Priority: -1

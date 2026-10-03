@@ -7,6 +7,8 @@ repos:
       - id: check-json
       - id: check-merge-conflict
       - id: check-symlinks
+        # Resolves only on the booted system, where systemd-resolved creates the target.
+        exclude: ^(orin|thor)/rootfs/etc/resolv\.conf$
       - id: check-toml
       - id: check-yaml
       - id: debug-statements

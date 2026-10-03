@@ -73,6 +73,15 @@ RUN git init && \
     make bin install-all DESTDIR=${DESTDIR} CARGO_FEATURES=rhel9
 
 
+# Built on bookworm so the binary links against a glibc no newer than Ubuntu 24.04's.
+FROM rust:1.98-bookworm AS bootc-imagectl
+
+ARG BOOTC_IMAGECTL_REV=f54932ea30b8a4189fe6099b30eac38f1746be6f
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    cargo install --locked --root /out \
+    --git https://github.com/yeetypete/bootc-imagectl --rev "${BOOTC_IMAGECTL_REV}" \
+    bootc-imagectl
+
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -83,12 +92,18 @@ COPY --from=bootc-builder /out/usr/ /usr/
 COPY --from=bootc-builder /out/etc/ /etc/
 RUN ldconfig
 
-# bootc requires dracut, so keep initramfs-tools out.
-COPY <<EOF /etc/apt/preferences.d/no-initramfs-tools
-Package: initramfs-tools*
-Pin: release *
-Pin-Priority: -1
-EOF
+# The apt pin keeps initramfs-tools out, since finalize builds the initramfs with
+# dracut. /etc/resolv.conf must be a symlink before the first RUN, because docker
+# bind-mounts a regular one and finalize cannot remove a mount.
+COPY rootfs/etc/ /etc/
+
+# Create every user and group with the UID and GID the sysusers lock file fixes,
+# before any package can allocate a different one.
+COPY rootfs/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y systemd && \
+    systemd-sysusers
 
 # NVIDIA Jetson repos for JetPack 7.2 (Jetson Linux r39.2). 'som' serves the Orin
 # family, 'common' carries CUDA, TensorRT, and friends.
@@ -126,6 +141,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     fdisk \
     less \
     libnss-mdns \
+    libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
     linux-modules-extra-${KERNEL_RELEASE} \
     linux-modules-tegra-igpu-nvgpu-jetson-${KERNEL_RELEASE} \
@@ -170,27 +186,8 @@ COPY rootfs/ /
 RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu; \
     ln -sfnT "$libdir/libcuda.so" /usr/lib/aarch64-linux-gnu/libcuda.so; \
     ln -sfnT "$libdir/libcuda.so.1" /usr/lib/aarch64-linux-gnu/libcuda.so.1; \
-    echo "$libdir" > /etc/ld.so.conf.d/000-nvidia-gpu-libs.conf
-
-# Generate the initramfs and stage vmlinuz next to the modules for ostree/bootc.
-RUN depmod "${KERNEL_RELEASE}"; \
-    ldconfig; \
-    dracut --force --no-hostonly --reproducible --zstd --verbose \
-      --kver "${KERNEL_RELEASE}" "/usr/lib/modules/${KERNEL_RELEASE}/initramfs.img"; \
-    cp "/boot/vmlinuz-${KERNEL_RELEASE}" "/usr/lib/modules/${KERNEL_RELEASE}/vmlinuz"
-
-# Make the filesystem layout ostree-compatible. Remove the placeholder fstab too,
-# or bootc's /etc overlay makes libmount warn "fstab has been modified" at boot.
-# hadolint ignore=SC2114
-RUN rm -rf /boot /srv /home /root /usr/local /mnt && \
-    mkdir -p /boot /sysroot /usr/lib/ostree /var && \
-    ln -s /var/home /home && \
-    ln -s /var/roothome /root && \
-    ln -s /var/srv /srv && \
-    ln -s /var/usrlocal /usr/local && \
-    ln -s /var/mnt /mnt && \
-    ln -s sysroot/ostree /ostree && \
-    rm -f /etc/fstab
+    echo "$libdir" > /etc/ld.so.conf.d/000-nvidia-gpu-libs.conf; \
+    ldconfig
 
 # Ubuntu ships tmp.mount in /usr/share/systemd/ (opt-in). Copy it to the unit
 # search path so systemctl enable can find it.
@@ -234,17 +231,11 @@ RUN pam-auth-update --enable mkhomedir && \
     echo "ubuntu ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu && \
     chmod 440 /etc/sudoers.d/ubuntu
 
-# Relocate the dpkg database to /usr so it persists across image updates (/var is
-# only applied at first provisioning). A tmpfiles.d symlink restores /var/lib/dpkg.
-RUN mkdir -p /usr/lib/sysimage && \
-    mv /var/lib/dpkg /usr/lib/sysimage/dpkg
-
-# bootc expects /var empty (populated at boot via tmpfiles.d) and /run, /tmp clean.
-RUN rm -rf /run/* /tmp/* /var/log/* && \
-    find /var -mindepth 1 -type f -delete && \
-    find /var -mindepth 1 -type l -delete && \
-    find /var -mindepth 1 -type d -empty -delete
-
 LABEL containers.bootc=1
 
-RUN bootc container lint --fatal-warnings
+# Lay out the filesystem, fix the accounts, stage the kernel, build the initramfs,
+# relocate the dpkg database under /usr, empty /var into tmpfiles.d entries and
+# lint the result.
+COPY --from=bootc-imagectl /out/bin/bootc-imagectl /usr/libexec/bootc-imagectl
+RUN /usr/libexec/bootc-imagectl finalize \
+    --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf
