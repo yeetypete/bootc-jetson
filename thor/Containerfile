@@ -68,6 +68,7 @@ RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev
 # use SELinux, so leave out the default selinux feature.
 RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
     --mount=type=cache,target=/bootc/target,sharing=locked \
+    CARGO_PROFILE_RELEASE_DEBUG=false CARGO_PROFILE_RELEASE_STRIP=true \
     make bin install DESTDIR=/out \
     CARGO_OPTIONS='--no-default-features --features "install-to-disk rhel9"'
 
