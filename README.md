@@ -24,8 +24,10 @@ Support is currently limited to:
   TensorRT, multimedia, and the GPU/display stack).
 - A custom build of the `nvidia-l4t-kernel` (6.8 Tegra) with `EROFS` and
   `FS_VERITY` enabled, as required by `bootc`'s composefs backend.
-- A `systemd-boot` + `systemd-networkd`/`resolved`/`timesyncd` base with SSH
-  enabled.
+- A sealed [UKI](https://bootc.dev/bootc/bootc-experimental-composefs.7.html#building-sealed-images)
+  booted by `systemd-boot`, built and finalized with
+  [`bootc-imagectl`](https://github.com/yeetypete/bootc-imagectl).
+- A `systemd-networkd`/`resolved`/`timesyncd` base with SSH enabled.
 - An `ubuntu` user (password `ubuntu`, passwordless `sudo`).
 
 ## Requirements
