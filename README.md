@@ -91,9 +91,13 @@ Once booted, the system updates transactionally with `bootc upgrade`, which
 pulls a newer image and stages it as a new deployment you can roll back to if
 needed. See the [`bootc` upgrade docs](https://bootc-dev.github.io/bootc/upgrades.html).
 
-Releases move the `<variant>-jp7.2` tag that `bootc upgrade` follows. Every CI
-build is also published as `<variant>-jp7.2-<short-sha>`, so you can try a pull
-request with e.g.
+CI pushes every build to Docker Hub:
+
+- `<variant>-jp7.2-<short sha>`: every build, including pull requests and `main`.
+- `<variant>-jp7.2-<version>`: releases only, from the `v<version>` tag.
+- `<variant>-jp7.2`: releases only. This is the tag `bootc upgrade` follows.
+
+Try a pull request with e.g.
 `sudo bootc switch docker.io/yeetypete/bootc-jetson:orin-jp7.2-abc1234`.
 
 ## License
