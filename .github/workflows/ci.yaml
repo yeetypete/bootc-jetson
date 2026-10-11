@@ -11,13 +11,17 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ (github.ref == 'refs/heads/main') && format('-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+env:
+  REPOSITORY: docker.io/yeetypete/bootc-jetson
+  JETPACK: "7.2"
 
 jobs:
   pre-commit:
     name: pre-commit
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -28,52 +32,123 @@ jobs:
       - name: Run pre-commit hooks
         uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2
 
-  jetson-tools:
-    name: Test jetson-tools
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-      - name: Install Rust toolchain
-        working-directory: jetson-tools
-        run: rustup toolchain install
-      - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: jetson-tools
-      - name: Install just
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y just
-      - name: Check
-        run: just check
-      - name: Test
-        run: just test
-
-  build:
-    name: build
-    needs: [pre-commit, jetson-tools]
+  image:
+    name: Build and push ${{ matrix.variant }} image
+    needs: pre-commit
+    runs-on: ubuntu-26.04-arm
+    environment: release
     strategy:
       fail-fast: false
       matrix:
         variant: [orin, thor]
     permissions:
       contents: read
-    uses: ./.github/workflows/build.yaml
-    with:
-      variant: ${{ matrix.variant }}
-      version: ${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
-      revision: ${{ github.event.pull_request.head.sha || github.sha }}
-      release: ${{ github.ref_type == 'tag' }}
-    secrets: inherit
+      packages: write
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install just and Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y just podman
+
+      # Every run pushes an image.
+      - name: Login to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          podman login docker.io \
+            --username "$DOCKERHUB_USERNAME" --password-stdin <<< "$DOCKERHUB_TOKEN"
+
+      - name: Login to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          podman login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin <<< "$GITHUB_TOKEN"
+
+      # github.sha is a merge commit on PRs, so use the PR head sha instead.
+      - name: Derive image tags
+        id: tags
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          echo "short_sha=${SHA::7}" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image
+        env:
+          VARIANT: ${{ matrix.variant }}
+          VERSION: ${{ steps.tags.outputs.version || steps.tags.outputs.short_sha }}
+          REVISION: ${{ steps.tags.outputs.short_sha }}
+          CACHE: ghcr.io/${{ github.repository }}/cache-${{ matrix.variant }}
+        run: |
+          podman build \
+            --platform linux/arm64 \
+            --build-arg VERSION="$VERSION" \
+            --build-arg REVISION="$REVISION" \
+            --cache-from "$CACHE" \
+            --cache-to "$CACHE" \
+            --tag "bootc-jetson-$VARIANT" \
+            "$VARIANT"
+
+      # Tagging scheme:
+      # 1. The short sha tag is pushed on every build. Short 7 character SHA is
+      # used to make it easier to type when running `bootc switch`.
+      # 2. Releases also push the version tag and move the rolling
+      # <variant>-jp<jetpack> tag, which `bootc upgrade` follows.
+      - name: Push image
+        env:
+          VARIANT: ${{ matrix.variant }}
+          SHORT_SHA: ${{ steps.tags.outputs.short_sha }}
+          VERSION: ${{ steps.tags.outputs.version }}
+        run: |
+          base="$VARIANT-jp$JETPACK"
+          tags=("$base-$SHORT_SHA")
+          if [ -n "$VERSION" ]; then
+            tags+=("$base-$VERSION" "$base")
+          fi
+          for tag in "${tags[@]}"; do
+            podman push --compression-format zstd --force-compression \
+              "bootc-jetson-$VARIANT" "$REPOSITORY:$tag"
+          done
+
+      # Install from the registry, so the disk image boots the pushed digest.
+      - name: Create disk image
+        env:
+          VARIANT: ${{ matrix.variant }}
+          SHORT_SHA: ${{ steps.tags.outputs.short_sha }}
+        run: |
+          just variant="$VARIANT" dist \
+            "docker://$REPOSITORY:$VARIANT-jp$JETPACK-$SHORT_SHA"
+
+      - name: Upload disk image artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: disk-image-${{ matrix.variant }}
+          path: |
+            *.img.zst
+            *.img.zst.sha256
+          if-no-files-found: error
+          retention-days: 5
 
   release:
     name: release
     if: github.ref_type == 'tag'
-    needs: build
-    runs-on: ubuntu-24.04
+    needs: image
+    runs-on: ubuntu-26.04
     environment: release
     permissions:
       contents: write

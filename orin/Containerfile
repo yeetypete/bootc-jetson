@@ -1,0 +1,252 @@
+# hadolint global ignore=DL3008,DL3059,DL4006
+# DL4006: podman builds OCI images, which ignore SHELL, so RUN keeps /bin/sh.
+
+ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60
+ARG RUST_IMAGE=docker.io/library/rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
+
+
+FROM ${UBUNTU_IMAGE} AS system-files
+
+COPY system_files/ /system_files/
+RUN chmod -R go-w /system_files
+
+
+FROM ${UBUNTU_IMAGE} AS bootc-builder
+
+ENV PATH=/usr/lib/rust-1.91/bin:$PATH
+
+ARG BOOTC_VERSION=v1.17.1
+ARG OSTREE_VERSION=v2026.4
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
+    autoconf \
+    automake \
+    bison \
+    build-essential \
+    ca-certificates \
+    cargo-1.91 \
+    git \
+    go-md2man \
+    libext2fs-dev \
+    libglib2.0-dev \
+    liblzma-dev \
+    libssl-dev \
+    libsystemd-dev \
+    libtool \
+    libzstd-dev \
+    pkg-config
+
+# bootc requires ostree >= 2025.3 but Ubuntu 24.04 ships 2024.5, so build from source.
+WORKDIR /ostree
+RUN git clone \
+    --depth 1 \
+    --branch ${OSTREE_VERSION} \
+    --recurse-submodules \
+    --shallow-submodules \
+    --jobs 8 \
+    https://github.com/ostreedev/ostree.git . && \
+    env NOCONFIGURE=1 ./autogen.sh && \
+    ./configure \
+    --prefix=/usr \
+    --libdir=/usr/lib \
+    --sysconfdir=/etc \
+    --without-gpgme \
+    --with-libsystemd \
+    --disable-rofiles-fuse && \
+    make -j"$(nproc)" && \
+    make install && \
+    make install-libLTLIBRARIES install-binPROGRAMS DESTDIR=/out && \
+    ldconfig
+
+WORKDIR /bootc
+RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git .
+
+# The rhel9 feature selects composefs-rs loopback EROFS mounts, which work on
+# the Jetson's 6.8 kernel (file-backed EROFS needs Linux 6.12+). Ubuntu does not
+# use SELinux, so leave out the default selinux feature.
+RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
+    --mount=type=cache,target=/bootc/target,sharing=locked \
+    make bin install DESTDIR=/out \
+    CARGO_OPTIONS='--no-default-features --features "install-to-disk rhel9"'
+
+
+FROM ${RUST_IMAGE} AS bootc-imagectl
+
+ARG BOOTC_IMAGECTL_REV=c0c450b9855f237cf7deedc69d3bff3a21280b52
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    cargo install --locked --root /out \
+    --git https://github.com/yeetypete/bootc-imagectl --rev "${BOOTC_IMAGECTL_REV}" \
+    bootc-imagectl
+
+
+FROM ${UBUNTU_IMAGE} AS image
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Keep package installs from generating an initramfs. finalize builds it with dracut.
+ENV INITRD=No
+
+# Create every user and group with the UID and GID the sysusers lock file fixes
+# before any package can allocate a different one.
+COPY --from=system-files /system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates \
+    systemd && \
+    systemd-sysusers
+
+# NVIDIA Jetson repos for JetPack 7.2 (Jetson Linux r39.2). 'som' serves the Orin
+# family, 'common' carries CUDA, TensorRT, and friends.
+COPY --from=system-files /system_files/usr/share/keyrings/ /usr/share/keyrings/
+COPY --from=system-files /system_files/etc/apt/sources.list.d/ /etc/apt/sources.list.d/
+
+# Skip the L4T preinst QSPI boot-firmware flash, which assumes a live install.
+RUN mkdir -p /opt/nvidia/l4t-packages && \
+    touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
+
+ARG KERNEL_RELEASE=6.8.0-1035-nvidia-tegra
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
+    avahi-daemon \
+    dosfstools \
+    dracut \
+    fdisk \
+    libnss-mdns \
+    libnss-systemd \
+    linux-image-${KERNEL_RELEASE} \
+    linux-modules-extra-${KERNEL_RELEASE} \
+    linux-modules-tegra-igpu-nvgpu-jetson-${KERNEL_RELEASE} \
+    linux-modules-tegra-oot-jetson-${KERNEL_RELEASE} \
+    nvidia-l4t-3d-core \
+    nvidia-l4t-bootloader \
+    nvidia-l4t-camera \
+    nvidia-l4t-core \
+    nvidia-l4t-cuda-nvgpu \
+    nvidia-l4t-firmware \
+    nvidia-l4t-firmware-nvgpu \
+    nvidia-l4t-gbm \
+    nvidia-l4t-gstreamer \
+    nvidia-l4t-init \
+    nvidia-l4t-multimedia \
+    nvidia-l4t-multimedia-utils \
+    nvidia-l4t-nvfancontrol \
+    nvidia-l4t-nvml \
+    nvidia-l4t-nvpmodel \
+    nvidia-l4t-nvsci \
+    nvidia-l4t-pva \
+    nvidia-l4t-tools \
+    openssh-server \
+    podman \
+    skopeo \
+    systemd-boot \
+    systemd-resolved \
+    systemd-timesyncd \
+    systemd-ukify \
+    ubuntu-minimal \
+    zstd && \
+    # Canonical's iGPU defaults blacklist the GPU modules and leave loading to
+    # the nv-load-* services, which are masked below.
+    rm -f /etc/modprobe.d/tegra-igpu-jetson-defaults_nvidia-display_nvidia-tegra.conf
+
+# bootc links against the ostree built alongside it.
+COPY --from=bootc-builder /out/usr/ /usr/
+RUN ldconfig
+
+COPY --from=system-files /system_files/ /
+
+# Replicate the masked nv-load-gpu-libs.service, which writes to read-only /usr.
+# Orin (tegra234) uses nvgpu.
+RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu && \
+    ln -sfnT "$libdir/libcuda.so" /usr/lib/aarch64-linux-gnu/libcuda.so && \
+    ln -sfnT "$libdir/libcuda.so.1" /usr/lib/aarch64-linux-gnu/libcuda.so.1 && \
+    echo "$libdir" > /etc/ld.so.conf.d/000-nvidia-gpu-libs.conf && \
+    ldconfig
+
+RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
+
+RUN systemctl enable \
+    ssh.service \
+    sshd-keygen.service \
+    systemd-growfs@sysroot.service \
+    systemd-networkd.service \
+    tmp.mount && \
+    systemctl disable \
+    apt-daily-upgrade.timer \
+    apt-daily.timer && \
+    # nv-l4t-bootloader-config.service is not bootc-aware (runs lsblk on the
+    # composefs root). On Orin it is safe to mask, since UEFI and nvbootctrl read
+    # board identity from EEPROM directly.
+    rm -f \
+    /etc/systemd/system/nv-load-display-modules.service \
+    /etc/systemd/system/nv-load-gpu-libs.service \
+    /etc/systemd/system/multi-user.target.wants/nv-load-display-modules.service \
+    /etc/systemd/system/sysinit.target.wants/nv-load-gpu-libs.service \
+    /etc/systemd/system/nv-graphics.service \
+    /etc/systemd/system/nv-l4t-bootloader-config.service \
+    /etc/systemd/system/multi-user.target.wants/nv-l4t-bootloader-config.service && \
+    systemctl mask \
+    nv-load-display-modules.service \
+    nv-load-gpu-libs.service \
+    nv-graphics.service \
+    nv-l4t-bootloader-config.service
+
+# Create home directories on first login.
+RUN pam-auth-update --enable mkhomedir
+
+# The base image's ubuntu user, with password ubuntu and passwordless sudo.
+RUN echo 'ubuntu:ubuntu' | chpasswd && \
+    echo "ubuntu ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu && \
+    chmod 440 /etc/sudoers.d/ubuntu
+
+LABEL containers.bootc=1
+CMD ["/sbin/init"]
+
+
+FROM image AS finalized
+
+COPY --from=bootc-imagectl /out/bin/bootc-imagectl /usr/libexec/bootc-imagectl
+RUN --network=none /usr/libexec/bootc-imagectl finalize \
+    --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf
+
+
+# The UKI embeds the kernel and initramfs.
+FROM finalized AS rootfs
+
+RUN bootc container split-kernel-and-rootfs --output /kernel && \
+    rm -r /kernel
+
+RUN bootc container lint --fatal-warnings
+
+
+# WORKAROUND: podman < 6.0 (buildah 1.44) leaves bind-mounted stages out of
+# cache keys. Building on rootfs keeps a cached UKI from being reused with a
+# different rootfs.
+FROM rootfs AS uki
+
+# The kernel and initramfs come from finalized, the systemd-stub from rootfs.
+# The UKI carries no devicetree. The Jetson's UEFI firmware provides it.
+RUN --mount=type=bind,from=rootfs,target=/target \
+    --mount=type=bind,from=finalized,source=/usr/lib/modules,target=/kernel \
+    kver="$(ls /kernel)" && \
+    mkdir /uki && \
+    bootc container ukify --rootfs /target --kernel-dir "/kernel/${kver}" \
+    -- --stub /target/usr/lib/systemd/boot/efi/linuxaa64.efi.stub \
+    --output "/uki/${kver}.efi"
+
+
+FROM rootfs
+
+COPY --from=uki /uki/ /boot/EFI/Linux/
+
+ARG VERSION=v0.0.0
+ARG REVISION=
+LABEL org.opencontainers.image.source="https://github.com/yeetypete/bootc-jetson" \
+    org.opencontainers.image.version="${VERSION}" \
+    org.opencontainers.image.revision="${REVISION}" \
+    org.opencontainers.image.licenses="MIT" \
+    org.opencontainers.image.title="bootc-jetson Orin" \
+    org.opencontainers.image.description="bootc image for NVIDIA Jetson Orin on JetPack 7.2."

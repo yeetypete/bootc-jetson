@@ -8,8 +8,8 @@ r39.2).
 > [!WARNING]
 > This repository is intended as a **reference example** of running `bootc` on
 > Jetson hardware, not as a base image that other projects consume directly.
-> Fork it and adapt the `Dockerfile` and `rootfs/` to your own needs rather than
-> depending on the published bootc images in production.
+> Fork it and adapt the `Containerfile` and `system_files/` to your own needs
+> rather than depending on the published bootc images in production.
 
 Support is currently limited to:
 
@@ -18,16 +18,16 @@ Support is currently limited to:
 
 ## What's in the image
 
-- `bootc` with the [composefs backend](https://bootc.dev/bootc/experimental-composefs.html)
-  enabled for image storage and deployment, a read-only root filesystem, and
-  [transient `/etc`](https://bootc.dev/bootc/filesystem.html#enabling-transient-etc)
-  (changes to `/etc` reset on reboot).
+- `bootc` with the [composefs backend](https://bootc.dev/bootc/bootc-experimental-composefs.7.html)
+  enabled for image storage and deployment, and a read-only `/usr`.
 - Ubuntu 24.04 with the NVIDIA Jetson L4T packages for JetPack 7.2 (CUDA,
   TensorRT, multimedia, and the GPU/display stack).
 - A custom build of the `nvidia-l4t-kernel` (6.8 Tegra) with `EROFS` and
   `FS_VERITY` enabled, as required by `bootc`'s composefs backend.
-- A `systemd-boot` + `systemd-networkd`/`resolved`/`timesyncd` base with SSH
-  enabled.
+- A sealed [UKI](https://bootc.dev/bootc/bootc-experimental-composefs.7.html#building-sealed-images)
+  booted by `systemd-boot`, built and finalized with
+  [`bootc-imagectl`](https://github.com/yeetypete/bootc-imagectl).
+- A `systemd-networkd`/`resolved`/`timesyncd` base with SSH enabled.
 - An `ubuntu` user (password `ubuntu`, passwordless `sudo`).
 
 ## Requirements
@@ -37,7 +37,7 @@ Support is currently limited to:
 - A Linux host with [`just`](https://github.com/casey/just) and `zstd` to flash
   a release build (see [Option 1](#option-1-flash-a-release-build)).
 - Only for [building locally](#option-2-build-locally): an `arm64` host with
-  [Docker](https://docs.docker.com/) installed.
+  [Podman](https://podman.io/) installed.
 
 ## Provisioning a Jetson
 
@@ -77,7 +77,7 @@ write the image.
 > Building locally requires an `arm64` host.
 
 ```bash
-just build  # Build the Jetson bootc image (OCI archive).
+just build  # Build the Jetson bootc image with Podman.
 just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
 
@@ -91,9 +91,13 @@ Once booted, the system updates transactionally with `bootc upgrade`, which
 pulls a newer image and stages it as a new deployment you can roll back to if
 needed. See the [`bootc` upgrade docs](https://bootc-dev.github.io/bootc/upgrades.html).
 
-Releases move the `<variant>-jp7.2` tag that `bootc upgrade` follows. Every CI
-build is also published as `<variant>-jp7.2-<short-sha>`, so you can try a pull
-request with e.g.
+CI pushes every build to Docker Hub:
+
+- `<variant>-jp7.2-<short sha>`: every build, including pull requests and `main`.
+- `<variant>-jp7.2-<version>`: releases only, from the `v<version>` tag.
+- `<variant>-jp7.2`: releases only. This is the tag `bootc upgrade` follows.
+
+Try a pull request with e.g.
 `sudo bootc switch docker.io/yeetypete/bootc-jetson:orin-jp7.2-abc1234`.
 
 ## License
