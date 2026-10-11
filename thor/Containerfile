@@ -104,11 +104,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY --from=system-files /system_files/usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=system-files /system_files/etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 
-# Stub update-initramfs (NVIDIA packages expect it, but we use dracut), and skip
-# the L4T preinst QSPI boot-firmware flash, which assumes a live install.
-RUN printf '#!/bin/sh\nexit 0\n' > /usr/sbin/update-initramfs && \
-    chmod +x /usr/sbin/update-initramfs && \
-    mkdir -p /opt/nvidia/l4t-packages && \
+# Skip the L4T preinst QSPI boot-firmware flash, which assumes a live install.
+RUN mkdir -p /opt/nvidia/l4t-packages && \
     touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
 
 ARG KERNEL_RELEASE=6.8.0-1035-nvidia-tegra
