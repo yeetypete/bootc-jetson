@@ -5,6 +5,12 @@ ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:a853f94d226358a79c740cfc7
 ARG RUST_IMAGE=docker.io/library/rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
 
 
+FROM ${UBUNTU_IMAGE} AS system-files
+
+COPY system_files/ /system_files/
+RUN chmod -R go-w /system_files
+
+
 FROM ${UBUNTU_IMAGE} AS bootc-builder
 
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -97,7 +103,7 @@ ENV INITRD=No
 
 # Create every user and group with the UID and GID the sysusers lock file fixes
 # before any package can allocate a different one.
-COPY system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
+COPY --from=system-files /system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y systemd && \
@@ -115,7 +121,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN curl -fsSLo /tmp/nvidia-jetson.asc "https://repo.download.nvidia.com/jetson/jetson-ota-public.asc" && \
     gpg --dearmor -o /usr/share/keyrings/nvidia-jetson.gpg /tmp/nvidia-jetson.asc && \
     rm /tmp/nvidia-jetson.asc
-COPY system_files/etc/apt/sources.list.d/ /etc/apt/sources.list.d/
+COPY --from=system-files /system_files/etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 
 # Stub update-initramfs (NVIDIA packages expect it, but we use dracut), and skip
 # the L4T preinst QSPI boot-firmware flash, which assumes a live install.
@@ -180,7 +186,7 @@ COPY --from=bootc-builder /out/usr/ /usr/
 COPY --from=bootc-builder /out/etc/ /etc/
 RUN ldconfig
 
-COPY system_files/ /
+COPY --from=system-files /system_files/ /
 
 # Replicate the masked nv-load-gpu-libs.service, which writes to read-only /usr.
 # Orin (tegra234) uses nvgpu.
