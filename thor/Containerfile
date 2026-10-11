@@ -29,7 +29,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     cargo-1.91 \
     git \
     go-md2man \
-    libcurl4-openssl-dev \
     libext2fs-dev \
     libglib2.0-dev \
     liblzma-dev \
@@ -53,8 +52,6 @@ RUN git clone \
     --prefix=/usr \
     --libdir=/usr/lib \
     --sysconfdir=/etc \
-    --with-curl \
-    --without-soup \
     --without-gpgme \
     --with-libsystemd \
     --disable-rofiles-fuse && \
@@ -124,7 +121,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     e2fsprogs \
     fdisk \
     less \
-    libcurl4t64 \
     libnss-mdns \
     libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
