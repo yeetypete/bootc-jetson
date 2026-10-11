@@ -1,25 +1,14 @@
 # bootc-jetson developer tasks.
 
 # Image repository for the built images.
-image := "yeetypete/bootc-jetson"
-# Version for image labels and tag suffix (docker bake strips a leading "v").
-version := "v0.0.0"
-# Git commit SHA for image labels.
-revision := `git rev-parse HEAD 2>/dev/null || echo ""`
+image := "docker.io/yeetypete/bootc-jetson"
 # JetPack release these images target.
 jetpack := "7.2"
-# Variant to build, e.g. `just variant=orin dist`. Each name is the variant's build dir.
+# Variant to build, e.g. `just variant=thor dist`. Each name is the variant's build dir.
 variant := "orin"
-# Whether `build` also pushes images to the registry.
-push := "false"
-# Whether `build` tags the image as a release (see docker-bake.hcl).
-release := "false"
 
-target := "jetson-" + variant
-# The mutable tag installed systems follow with `bootc upgrade`.
+# The rolling tag installed systems follow with `bootc upgrade`.
 tag := variant + "-jp" + jetpack
-# The tag `build` gives the image, per the tagging scheme in docker-bake.hcl.
-build_tag := if release == "true" { tag } else if revision == "" { tag } else { tag + "-" + replace_regex(revision, '^(.{7}).*$', '$1') }
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
@@ -37,23 +26,27 @@ check:
 test:
     cd jetson-tools && cargo test --locked
 
-# Build the bootc container image.
+# Build the bootc container image, and save it as an OCI archive for `disk`.
 build *args:
-    REPOSITORY={{ image }} VERSION={{ version }} REVISION={{ revision }} JETPACK={{ jetpack }} \
-        PUSH={{ push }} RELEASE={{ release }} docker buildx bake {{ target }} {{ args }}
+    podman build --platform linux/arm64 --tag {{ image }}:{{ tag }} {{ args }} {{ variant }}
+    # bootc runs as root and cannot read the rootless podman store.
+    rm -f {{ oci_archive }}
+    podman save --quiet --format oci-archive --output {{ oci_archive }} {{ image }}:{{ tag }}
 
-# Convert the built image into a flashable raw disk image via bootc install to-disk.
-disk:
+# Install an image into a flashable raw disk image via bootc install to-disk.
+disk source=("oci-archive:" + oci_archive):
+    # `source` is a containers-transports(5) reference, e.g. docker://<image>:<tag>.
     truncate -s {{ disk_size }} {{ disk_name }}.img
-    docker run \
-        --rm --privileged \
+    sudo podman run \
+        --rm --privileged --pid=host \
         --security-opt label=disable \
         -v /dev:/dev \
         -v "$PWD:/output" \
-        {{ image }}:{{ build_tag }} \
+        -w /output \
+        {{ source }} \
         bootc install to-disk \
-            --source-imgref oci-archive:/output/{{ oci_archive }}:{{ build_tag }} \
-            --target-imgref docker.io/{{ image }}:{{ tag }} \
+            --source-imgref {{ source }} \
+            --target-imgref {{ image }}:{{ tag }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
@@ -62,8 +55,8 @@ compress:
     zstd -T0 -v -o {{ disk_name }}.img.zst {{ disk_name }}.img
     sha256sum {{ disk_name }}.img.zst > {{ disk_name }}.img.zst.sha256
 
-# Build, compress, and checksum the disk image.
-dist: disk compress
+# Install, compress, and checksum the disk image.
+dist source=("oci-archive:" + oci_archive): (disk source) compress
 
 # Write a disk image to an external storage device.
 flash image=(disk_name + ".img"):

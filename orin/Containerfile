@@ -271,3 +271,12 @@ RUN --mount=type=bind,from=rootfs,target=/target \
 FROM rootfs
 
 COPY --from=uki /uki/ /boot/EFI/Linux/
+
+ARG VERSION=v0.0.0
+ARG REVISION=
+LABEL org.opencontainers.image.source="https://github.com/yeetypete/bootc-jetson" \
+    org.opencontainers.image.version="${VERSION}" \
+    org.opencontainers.image.revision="${REVISION}" \
+    org.opencontainers.image.licenses="MIT" \
+    org.opencontainers.image.title="bootc-jetson Orin" \
+    org.opencontainers.image.description="bootc image for NVIDIA Jetson Orin on JetPack 7.2."

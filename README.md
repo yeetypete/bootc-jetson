@@ -37,7 +37,7 @@ Support is currently limited to:
 - A Linux host with [`just`](https://github.com/casey/just) and `zstd` to flash
   a release build (see [Option 1](#option-1-flash-a-release-build)).
 - Only for [building locally](#option-2-build-locally): an `arm64` host with
-  [Docker](https://docs.docker.com/) installed.
+  [Podman](https://podman.io/) installed.
 
 ## Provisioning a Jetson
 
@@ -77,7 +77,7 @@ write the image.
 > Building locally requires an `arm64` host.
 
 ```bash
-just build  # Build the Jetson bootc image (OCI archive).
+just build  # Build the Jetson bootc image with Podman.
 just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
 
