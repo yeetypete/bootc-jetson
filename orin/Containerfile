@@ -75,7 +75,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
 
 FROM ${RUST_IMAGE} AS bootc-imagectl
 
-ARG BOOTC_IMAGECTL_REV=c0c450b9855f237cf7deedc69d3bff3a21280b52
+ARG BOOTC_IMAGECTL_REV=74c9b352b911c386f19e4f838f61eafdaf29e004
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     cargo install --locked --root /out \
     --git https://github.com/yeetypete/bootc-imagectl --rev "${BOOTC_IMAGECTL_REV}" \
