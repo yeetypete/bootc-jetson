@@ -82,6 +82,10 @@ vm image=(disk_name + ".img"):
 flash image=(disk_name + ".img"):
     scripts/flash.sh {{ image }}
 
+# Connect to a Jetson's serial console over USB.
+connect:
+    scripts/connect.sh
+
 # Remove generated disk images and the OCI archive.
 clean:
     rm -f {{ disk_name }}*.img {{ disk_name }}*.img.zst {{ disk_name }}*.img.zst.sha256 {{ oci_archive }}
