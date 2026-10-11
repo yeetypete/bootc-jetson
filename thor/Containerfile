@@ -95,8 +95,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Keep package installs from generating an initramfs. finalize builds it with dracut.
 ENV INITRD=No
 
-COPY system_files/etc/apt/preferences.d/ /etc/apt/preferences.d/
-
 # Create every user and group with the UID and GID the sysusers lock file fixes
 # before any package can allocate a different one.
 COPY system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
