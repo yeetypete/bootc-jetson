@@ -120,11 +120,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
     avahi-daemon \
-    bubblewrap \
     dosfstools \
     dracut \
     e2fsprogs \
-    efibootmgr \
     fdisk \
     less \
     libnss-mdns \
@@ -160,7 +158,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     systemd-timesyncd \
     systemd-ukify \
     ubuntu-minimal \
-    xfsprogs \
     zstd && \
     # Canonical's iGPU defaults blacklist the GPU modules and leave loading to
     # the nv-load-* services, which are masked below.
