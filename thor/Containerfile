@@ -126,6 +126,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     e2fsprogs \
     fdisk \
     less \
+    libcurl4t64 \
+    libgpgme11t64 \
     libnss-mdns \
     libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
