@@ -115,9 +115,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     avahi-daemon \
     dosfstools \
     dracut \
-    e2fsprogs \
     fdisk \
-    less \
     libnss-mdns \
     libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
@@ -146,7 +144,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     podman \
     skopeo \
     systemd-boot \
-    systemd-boot-efi \
     systemd-resolved \
     systemd-timesyncd \
     systemd-ukify \
