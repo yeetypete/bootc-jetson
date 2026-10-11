@@ -98,10 +98,10 @@ RUN ldconfig
 
 # /etc/resolv.conf must be a symlink before the first RUN. Docker bind-mounts a
 # regular one, which finalize cannot remove.
-COPY rootfs/etc/ /etc/
+COPY system_files/etc/ /etc/
 
 # Create users and groups with the lock file's IDs.
-COPY rootfs/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
+COPY system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y systemd && \
@@ -181,7 +181,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # the nv-load-* services, which are masked below.
     rm -f /etc/modprobe.d/tegra-igpu-jetson-defaults_nvidia-display_nvidia-tegra.conf
 
-COPY rootfs/ /
+COPY system_files/ /
 
 # Replicate the masked nv-load-gpu-libs.service, which writes to read-only /usr.
 # Orin (tegra234) uses nvgpu.
