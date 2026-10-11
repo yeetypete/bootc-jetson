@@ -12,6 +12,8 @@ tag := variant + "-jp" + jetpack
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
+# UEFI firmware for `vm`, from the qemu-efi-aarch64 package.
+aavmf := "/usr/share/AAVMF"
 
 # List available recipes.
 default:
@@ -57,6 +59,24 @@ compress:
 
 # Install, compress, and checksum the disk image.
 dist source=("oci-archive:" + oci_archive): (disk source) compress
+
+# Download the newest CI disk image built from a branch, by default the current one.
+download branch=`git branch --show-current`:
+    scripts/download.sh {{ variant }} {{ branch }}
+
+# Boot a disk image in an emulated arm64 VM. Quit with Ctrl-a x, SSH in on port 2222.
+vm image=(disk_name + ".img"):
+    qemu-system-aarch64 \
+        -snapshot \
+        -machine virt \
+        -cpu cortex-a72 \
+        -smp 4 \
+        -m 4G \
+        -drive if=pflash,format=raw,readonly=on,file={{ aavmf }}/AAVMF_CODE.fd \
+        -drive if=pflash,format=raw,file={{ aavmf }}/AAVMF_VARS.fd \
+        -drive if=virtio,format=raw,file={{ image }} \
+        -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 \
+        -nographic
 
 # Write a disk image to an external storage device.
 flash image=(disk_name + ".img"):
