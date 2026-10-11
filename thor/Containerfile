@@ -32,7 +32,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gtk-doc-tools \
     libcurl4-openssl-dev \
     libext2fs-dev \
-    libfuse3-dev \
     libglib2.0-dev \
     libgpgme-dev \
     liblzma-dev \
@@ -59,7 +58,8 @@ RUN git clone \
     --libdir=/usr/lib \
     --sysconfdir=/etc \
     --with-curl \
-    --with-libsystemd && \
+    --with-libsystemd \
+    --disable-rofiles-fuse && \
     make -j"$(nproc)" && \
     make install && \
     make install-libLTLIBRARIES install-binPROGRAMS DESTDIR=/out && \
