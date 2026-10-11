@@ -166,8 +166,6 @@ RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu && \
     echo "$libdir" > /etc/ld.so.conf.d/000-nvidia-gpu-libs.conf && \
     ldconfig
 
-# Ubuntu ships tmp.mount in /usr/share/systemd/ (opt-in). Copy it to the unit
-# search path so systemctl enable can find it.
 RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 RUN systemctl enable \
