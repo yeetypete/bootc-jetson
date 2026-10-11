@@ -18,10 +18,8 @@ Support is currently limited to:
 
 ## What's in the image
 
-- `bootc` with the [composefs backend](https://bootc.dev/bootc/experimental-composefs.html)
-  enabled for image storage and deployment, a read-only root filesystem, and
-  [transient `/etc`](https://bootc.dev/bootc/filesystem.html#enabling-transient-etc)
-  (changes to `/etc` reset on reboot).
+- `bootc` with the [composefs backend](https://bootc.dev/bootc/bootc-experimental-composefs.7.html)
+  enabled for image storage and deployment, and a read-only `/usr`.
 - Ubuntu 24.04 with the NVIDIA Jetson L4T packages for JetPack 7.2 (CUDA,
   TensorRT, multimedia, and the GPU/display stack).
 - A custom build of the `nvidia-l4t-kernel` (6.8 Tegra) with `EROFS` and
