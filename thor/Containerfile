@@ -181,6 +181,7 @@ RUN systemctl enable \
     avahi-daemon.service \
     nvidia-display-load.service \
     ssh.service \
+    sshd-keygen.service \
     systemd-growfs@sysroot.service \
     systemd-networkd.service \
     systemd-resolved.service \

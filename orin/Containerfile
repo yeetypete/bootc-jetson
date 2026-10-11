@@ -179,6 +179,7 @@ RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 RUN systemctl enable \
     avahi-daemon.service \
     ssh.service \
+    sshd-keygen.service \
     systemd-growfs@sysroot.service \
     systemd-networkd.service \
     systemd-resolved.service \
