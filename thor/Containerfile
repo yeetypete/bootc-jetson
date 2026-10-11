@@ -98,22 +98,15 @@ ENV INITRD=No
 COPY --from=system-files /system_files/usr/lib/sysusers.d/ /usr/lib/sysusers.d/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install --no-install-recommends -y systemd && \
-    systemd-sysusers
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
     ca-certificates \
-    curl \
-    gpg
+    systemd && \
+    systemd-sysusers
 
 # NVIDIA Jetson repos for JetPack 7.2 (Jetson Linux r39.2). 'som' serves the
 # Jetson modules (Orin and Thor share this suite), 'common' carries CUDA,
 # TensorRT, and friends.
-RUN curl -fsSLo /tmp/nvidia-jetson.asc "https://repo.download.nvidia.com/jetson/jetson-ota-public.asc" && \
-    gpg --dearmor -o /usr/share/keyrings/nvidia-jetson.gpg /tmp/nvidia-jetson.asc && \
-    rm /tmp/nvidia-jetson.asc
+COPY --from=system-files /system_files/usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=system-files /system_files/etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 
 # Stub update-initramfs (NVIDIA packages expect it, but we use dracut), and skip
