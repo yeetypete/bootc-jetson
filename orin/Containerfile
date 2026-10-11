@@ -13,11 +13,8 @@ RUN chmod -R go-w /system_files
 
 FROM ${UBUNTU_IMAGE} AS bootc-builder
 
-ENV RUSTUP_HOME=/usr/local/rustup \
-    CARGO_HOME=/usr/local/cargo \
-    PATH=/usr/local/cargo/bin:$PATH
+ENV PATH=/usr/lib/rust-1.91/bin:$PATH
 
-ARG RUST_VERSION=1.96.0
 ARG BOOTC_VERSION=v1.17.1
 ARG OSTREE_VERSION=v2026.1
 
@@ -29,7 +26,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     bison \
     build-essential \
     ca-certificates \
-    curl \
+    cargo-1.91 \
     git \
     go-md2man \
     gtk-doc-tools \
@@ -69,17 +66,13 @@ RUN git clone \
     make install DESTDIR=/ && \
     ldconfig
 
-RUN curl --proto '=https' --tlsv1.2 -sSfo /tmp/rustup-init.sh https://sh.rustup.rs && \
-    sh /tmp/rustup-init.sh -y --no-modify-path --profile minimal --default-toolchain ${RUST_VERSION} && \
-    rm /tmp/rustup-init.sh
-
 WORKDIR /bootc
 RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git .
 
 # The rhel9 feature selects composefs-rs loopback EROFS mounts, which work on
 # the Jetson's 6.8 kernel (file-backed EROFS needs Linux 6.12+). Ubuntu does not
 # use SELinux, so leave out the default selinux feature.
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
     --mount=type=cache,target=/bootc/target,sharing=locked \
     make bin install DESTDIR=/out \
     CARGO_OPTIONS='--no-default-features --features "install-to-disk rhel9"'
