@@ -29,18 +29,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     cargo-1.91 \
     git \
     go-md2man \
-    gtk-doc-tools \
     libcurl4-openssl-dev \
     libext2fs-dev \
     libglib2.0-dev \
     libgpgme-dev \
     liblzma-dev \
-    libsoup-3.0-dev \
     libssl-dev \
     libsystemd-dev \
     libtool \
     libzstd-dev \
-    meson \
     pkg-config
 
 # bootc requires ostree >= 2025.3 but Ubuntu 24.04 ships 2024.5, so build from source.
@@ -58,6 +55,7 @@ RUN git clone \
     --libdir=/usr/lib \
     --sysconfdir=/etc \
     --with-curl \
+    --without-soup \
     --with-libsystemd \
     --disable-rofiles-fuse && \
     make -j"$(nproc)" && \
