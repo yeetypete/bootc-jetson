@@ -177,13 +177,10 @@ RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu && \
 RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 RUN systemctl enable \
-    avahi-daemon.service \
     ssh.service \
     sshd-keygen.service \
     systemd-growfs@sysroot.service \
     systemd-networkd.service \
-    systemd-resolved.service \
-    systemd-timesyncd.service \
     tmp.mount && \
     systemctl disable \
     apt-daily-upgrade.timer \
@@ -205,10 +202,8 @@ RUN systemctl enable \
     nv-graphics.service \
     nv-l4t-bootloader-config.service
 
-# Create home directories on first login. Drop the pam_lastlog.so line, since the
-# module is gone from Ubuntu 24.04 and fails to dlopen.
-RUN pam-auth-update --enable mkhomedir && \
-    sed -i '/pam_lastlog\.so/d' /etc/pam.d/login
+# Create home directories on first login.
+RUN pam-auth-update --enable mkhomedir
 
 # The base image's ubuntu user, with password ubuntu and passwordless sudo.
 RUN echo 'ubuntu:ubuntu' | chpasswd && \
