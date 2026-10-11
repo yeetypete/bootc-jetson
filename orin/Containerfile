@@ -32,7 +32,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libcurl4-openssl-dev \
     libext2fs-dev \
     libglib2.0-dev \
-    libgpgme-dev \
     liblzma-dev \
     libssl-dev \
     libsystemd-dev \
@@ -56,6 +55,7 @@ RUN git clone \
     --sysconfdir=/etc \
     --with-curl \
     --without-soup \
+    --without-gpgme \
     --with-libsystemd \
     --disable-rofiles-fuse && \
     make -j"$(nproc)" && \
@@ -124,7 +124,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     fdisk \
     less \
     libcurl4t64 \
-    libgpgme11t64 \
     libnss-mdns \
     libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
