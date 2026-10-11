@@ -59,11 +59,10 @@ RUN git clone \
     --libdir=/usr/lib \
     --sysconfdir=/etc \
     --with-curl \
-    --with-dracut \
     --with-libsystemd && \
     make -j"$(nproc)" && \
-    make install DESTDIR=/out && \
-    make install DESTDIR=/ && \
+    make install && \
+    make install-libLTLIBRARIES install-binPROGRAMS DESTDIR=/out && \
     ldconfig
 
 WORKDIR /bootc
@@ -176,7 +175,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # bootc links against the ostree built alongside it.
 COPY --from=bootc-builder /out/usr/ /usr/
-COPY --from=bootc-builder /out/etc/ /etc/
 RUN ldconfig
 
 COPY --from=system-files /system_files/ /
