@@ -1,8 +1,8 @@
 # hadolint global ignore=DL3008,DL3059,DL4006
 # DL4006: podman builds OCI images, which ignore SHELL, so RUN keeps /bin/sh.
 
-ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60
-ARG RUST_IMAGE=docker.io/library/rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
+ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+ARG RUST_IMAGE=docker.io/library/rust:1.99-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6
 ARG BOOTC_IMAGECTL_REV=74c9b352b911c386f19e4f838f61eafdaf29e004
 
 
@@ -110,7 +110,7 @@ COPY --from=system-files /system_files/etc/apt/sources.list.d/ /etc/apt/sources.
 RUN mkdir -p /opt/nvidia/l4t-packages && \
     touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall
 
-ARG KERNEL_RELEASE=6.8.0-1035-nvidia-tegra
+ARG KERNEL_RELEASE=6.8.0-1036-nvidia-tegra
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
