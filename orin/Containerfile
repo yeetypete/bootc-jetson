@@ -3,7 +3,7 @@
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 ARG RUST_IMAGE=docker.io/library/rust:1.99-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6
-ARG BOOTC_IMAGECTL_REV=74c9b352b911c386f19e4f838f61eafdaf29e004
+ARG BOOTC_IMAGECTL_REV=e161a6e19936bdc6afccd4e4ade19da849048096
 
 
 FROM ${UBUNTU_IMAGE} AS system-files
@@ -171,10 +171,8 @@ RUN libdir=/opt/nvidia/l4t-gpu-libs/nvgpu && \
 RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 RUN systemctl enable \
-    ssh.service \
     sshd-keygen.service \
     systemd-growfs@sysroot.service \
-    systemd-networkd.service \
     tmp.mount && \
     systemctl disable \
     apt-daily-upgrade.timer \
@@ -235,11 +233,10 @@ FROM rootfs AS uki
 # The UKI carries no devicetree. The Jetson's UEFI firmware provides it.
 RUN --mount=type=bind,from=rootfs,target=/target \
     --mount=type=bind,from=finalized,source=/usr/lib/modules,target=/kernel \
-    kver="$(ls /kernel)" && \
+    kver="$(basename "$(dirname /kernel/*/vmlinuz)")" && \
     mkdir /uki && \
     bootc container ukify --rootfs /target --kernel-dir "/kernel/${kver}" \
-    -- --stub /target/usr/lib/systemd/boot/efi/linuxaa64.efi.stub \
-    --output "/uki/${kver}.efi"
+    -- --output "/uki/${kver}.efi"
 
 
 FROM rootfs
