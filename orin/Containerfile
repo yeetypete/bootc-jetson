@@ -3,6 +3,7 @@
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60
 ARG RUST_IMAGE=docker.io/library/rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e
+ARG BOOTC_IMAGECTL_REV=74c9b352b911c386f19e4f838f61eafdaf29e004
 
 
 FROM ${UBUNTU_IMAGE} AS system-files
@@ -75,7 +76,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
 
 FROM ${RUST_IMAGE} AS bootc-imagectl
 
-ARG BOOTC_IMAGECTL_REV=74c9b352b911c386f19e4f838f61eafdaf29e004
+ARG BOOTC_IMAGECTL_REV
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     cargo install --locked --root /out \
     --git https://github.com/yeetypete/bootc-imagectl --rev "${BOOTC_IMAGECTL_REV}" \
@@ -209,8 +210,10 @@ CMD ["/sbin/init"]
 
 FROM image AS finalized
 
-COPY --from=bootc-imagectl /out/bin/bootc-imagectl /usr/libexec/bootc-imagectl
-RUN --network=none /usr/libexec/bootc-imagectl finalize \
+ARG BOOTC_IMAGECTL_REV
+RUN --network=none \
+    --mount=type=bind,from=bootc-imagectl,source=/out/bin/bootc-imagectl,target=/usr/libexec/bootc-imagectl \
+    /usr/libexec/bootc-imagectl finalize \
     --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf
 
 
