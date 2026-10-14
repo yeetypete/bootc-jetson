@@ -3,3 +3,6 @@ Name=e*
 
 [Network]
 DHCP=yes
+
+[DHCPv4]
+UseHostname=no
