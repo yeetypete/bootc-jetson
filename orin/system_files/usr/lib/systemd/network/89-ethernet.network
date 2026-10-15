@@ -1,0 +1,10 @@
+# Enable DHCPv4 and DHCPv6 on all physical ethernet links
+[Match]
+Kind=!*
+Type=ether
+
+[Network]
+DHCP=yes
+
+[DHCPv4]
+UseHostname=no
