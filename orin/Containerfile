@@ -3,7 +3,7 @@
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 ARG RUST_IMAGE=docker.io/library/rust:1.99-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6
-ARG BOOTC_IMAGECTL_REV=e161a6e19936bdc6afccd4e4ade19da849048096
+ARG BOOTC_IMAGECTL_REV=97ff91ffa469f227dd770d82dedbeff5c4c2e224
 
 
 FROM ${UBUNTU_IMAGE} AS system-files
@@ -172,7 +172,6 @@ RUN cp /usr/share/systemd/tmp.mount /usr/lib/systemd/system/
 
 # NVIDIA's 90-jetson.preset disables systemd-networkd.
 RUN systemctl enable \
-    sshd-keygen.service \
     systemd-growfs@sysroot.service \
     systemd-networkd.service \
     tmp.mount && \
@@ -196,6 +195,9 @@ RUN systemctl enable \
     nv-graphics.service \
     nv-l4t-bootloader-config.service
 
+# A transient /etc requires setting systemd-firstboot's settings in the image.
+RUN systemd-firstboot --locale=C.UTF-8 --timezone=UTC
+
 # Create home directories on first login.
 RUN pam-auth-update --enable mkhomedir
 
@@ -214,7 +216,9 @@ ARG BOOTC_IMAGECTL_REV
 RUN --network=none \
     --mount=type=bind,from=bootc-imagectl,source=/out/bin/bootc-imagectl,target=/usr/libexec/bootc-imagectl \
     /usr/libexec/bootc-imagectl finalize \
-    --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf
+    --sysusers-lock /usr/lib/sysusers.d/00-bootc-imagectl.lock.conf \
+    --read-only-accounts \
+    --transient-etc
 
 
 # The UKI embeds the kernel and initramfs.
