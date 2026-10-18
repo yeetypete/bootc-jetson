@@ -1,7 +1,7 @@
 # bootc-jetson developer tasks.
 
 # Image repository for the built images.
-image := "docker.io/yeetypete/bootc-jetson"
+repository := "docker.io/yeetypete/bootc-jetson"
 # JetPack release these images target.
 jetpack := "7.2"
 # Variant to build, e.g. `just variant=thor dist`. Each name is the variant's build dir.
@@ -9,6 +9,12 @@ variant := "orin"
 
 # The rolling tag installed systems follow with `bootc upgrade`.
 tag := variant + "-jp" + jetpack
+reference := repository + ":" + tag
+# Local images of the rootfs stage and of the chunked build context.
+rootfs := "localhost/bootc-jetson-" + variant + "-rootfs"
+chunked := "localhost/bootc-jetson-" + variant + "-chunked"
+# chunkah is used to split the rootfs into a layer per group of packages.
+chunkah_image := "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523"
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
@@ -28,16 +34,45 @@ check:
 test:
     cd jetson-tools && cargo test --locked
 
-# Build the bootc container image, and save it as an OCI archive for `disk`.
+# Build the rootfs stage, rechunk it with chunkah, and build the image from it.
 build *args:
-    podman build --platform linux/arm64 --tag {{ image }}:{{ tag }} {{ args }} {{ variant }}
+    podman build --platform linux/arm64 --target rootfs --tag {{ rootfs }} {{ args }} {{ variant }}
+    podman run --rm \
+        --mount type=image,src={{ rootfs }},dst=/chunkah \
+        --env CHUNKAH_CONFIG_STR="$(podman image inspect {{ rootfs }})" \
+        {{ chunkah_image }} build \
+            --max-layers 128 \
+            --source-date-epoch 0 \
+            --tag {{ chunked }} \
+        | podman load
+    podman build --platform linux/arm64 \
+        --build-context chunked=container-image://{{ chunked }} \
+        --tag {{ reference }} {{ args }} {{ variant }}
+
+# Save the image as an OCI archive for `disk`.
+save:
     # bootc runs as root and cannot read the rootless podman store.
     rm -f {{ oci_archive }}
-    podman save --quiet --format oci-archive --output {{ oci_archive }} {{ image }}:{{ tag }}
+    podman save --quiet --format oci-archive --output {{ oci_archive }} {{ reference }}
+
+# Push the image tagged <tag>-<short_sha>, and for a release also <tag>-<version> and <tag>.
+push short_sha version="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The short sha tag is pushed on every build.
+    tags=("{{ tag }}-{{ short_sha }}")
+    # Releases also push the version tag and move the rolling tag, which
+    # `bootc upgrade` follows.
+    if [ -n "{{ version }}" ]; then
+        tags+=("{{ tag }}-{{ version }}" "{{ tag }}")
+    fi
+    for t in "${tags[@]}"; do
+        podman push --compression-format zstd --force-compression \
+            {{ reference }} "{{ repository }}:$t"
+    done
 
 # Install an image into a flashable raw disk image via bootc install to-disk.
-disk source=("oci-archive:" + oci_archive):
-    # `source` is a containers-transports(5) reference, e.g. docker://<image>:<tag>.
+disk imgref=("oci-archive:" + oci_archive):
     truncate -s {{ disk_size }} {{ disk_name }}.img
     sudo podman run \
         --rm --privileged --pid=host \
@@ -45,10 +80,10 @@ disk source=("oci-archive:" + oci_archive):
         -v /dev:/dev \
         -v "$PWD:/output" \
         -w /output \
-        {{ source }} \
+        {{ imgref }} \
         bootc install to-disk \
-            --source-imgref {{ source }} \
-            --target-imgref {{ image }}:{{ tag }} \
+            --source-imgref {{ imgref }} \
+            --target-imgref {{ reference }} \
             --composefs-backend \
             --via-loopback /output/{{ disk_name }}.img
 
@@ -58,14 +93,14 @@ compress:
     sha256sum {{ disk_name }}.img.zst > {{ disk_name }}.img.zst.sha256
 
 # Install, compress, and checksum the disk image.
-dist source=("oci-archive:" + oci_archive): (disk source) compress
+dist imgref=("oci-archive:" + oci_archive): (disk imgref) compress
 
 # Download the newest CI disk image built from a branch, by default the current one.
 download branch=`git branch --show-current`:
     scripts/download.sh {{ variant }} {{ branch }}
 
 # Boot a disk image in an emulated arm64 VM. Quit with Ctrl-a x, SSH in on port 2222.
-vm image=(disk_name + ".img"):
+vm file=(disk_name + ".img"):
     qemu-system-aarch64 \
         -snapshot \
         -machine virt \
@@ -74,13 +109,13 @@ vm image=(disk_name + ".img"):
         -m 4G \
         -drive if=pflash,format=raw,readonly=on,file={{ aavmf }}/AAVMF_CODE.fd \
         -drive if=pflash,format=raw,file={{ aavmf }}/AAVMF_VARS.fd \
-        -drive if=virtio,format=raw,file={{ image }} \
+        -drive if=virtio,format=raw,file={{ file }} \
         -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 \
         -nographic
 
 # Write a disk image to an external storage device.
-flash image=(disk_name + ".img"):
-    scripts/flash.sh {{ image }}
+flash file=(disk_name + ".img"):
+    scripts/flash.sh {{ file }}
 
 # Connect to a Jetson's serial console over USB.
 connect:
@@ -88,4 +123,4 @@ connect:
 
 # Remove generated disk images and the OCI archive.
 clean:
-    rm -f {{ disk_name }}*.img {{ disk_name }}*.img.zst {{ disk_name }}*.img.zst.sha256 {{ oci_archive }}
+    rm -f {{ disk_name }}*.img* {{ oci_archive }}

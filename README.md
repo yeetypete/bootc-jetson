@@ -29,6 +29,8 @@ Support is currently limited to:
   [`bootc-imagectl`](https://github.com/yeetypete/bootc-imagectl).
 - A `systemd-networkd`/`resolved`/`timesyncd` base with SSH enabled.
 - An `ubuntu` user (password `ubuntu`, passwordless `sudo`).
+- Layers rechunked by package with
+  [chunkah](https://github.com/coreos/chunkah).
 - A [transient `/etc`](https://github.com/yeetypete/bootc-imagectl#transient-etc)
   that discards changes on every reboot, and read-only account files (accounts
   should be configured in the image only).
@@ -81,11 +83,13 @@ write the image.
 
 ```bash
 just build  # Build the Jetson bootc image with Podman.
+just save   # Save the image as an OCI archive for `just disk`.
 just disk   # Install the image into a loopback raw disk image.
 just flash  # Write the disk image to an SSD.
 
 # Or, for a Jetson Thor:
 just variant=thor build
+just variant=thor save
 just variant=thor disk
 just variant=thor flash
 ```
