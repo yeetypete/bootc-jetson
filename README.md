@@ -29,6 +29,9 @@ Support is currently limited to:
   [`bootc-imagectl`](https://github.com/yeetypete/bootc-imagectl).
 - A `systemd-networkd`/`resolved`/`timesyncd` base with SSH enabled.
 - An `ubuntu` user (password `ubuntu`, passwordless `sudo`).
+- A [transient `/etc`](https://github.com/yeetypete/bootc-imagectl#transient-etc)
+  that discards changes on every reboot, and read-only account files (accounts
+  should be configured in the image only).
 
 ## Requirements
 
