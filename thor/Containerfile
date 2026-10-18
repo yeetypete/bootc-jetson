@@ -119,6 +119,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     dosfstools \
     dracut \
     fdisk \
+    htop \
     libnss-mdns \
     libnss-systemd \
     linux-image-${KERNEL_RELEASE} \
