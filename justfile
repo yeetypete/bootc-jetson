@@ -10,9 +10,8 @@ variant := "orin"
 # The rolling tag installed systems follow with `bootc upgrade`.
 tag := variant + "-jp" + jetpack
 reference := repository + ":" + tag
-# Local images of the rootfs stage and of the chunked build context.
+# Local image of the rootfs stage, which chunkah rechunks.
 rootfs := "localhost/bootc-jetson-" + variant + "-rootfs"
-chunked := "localhost/bootc-jetson-" + variant + "-chunked"
 # chunkah is used to split the rootfs into a layer per group of packages.
 chunkah_image := "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523"
 disk_name := "bootc-jetson-" + variant
@@ -37,16 +36,17 @@ test:
 # Build the rootfs stage, rechunk it with chunkah, and build the image from it.
 build *args:
     podman build --platform linux/arm64 --target rootfs --tag {{ rootfs }} {{ args }} {{ variant }}
+    rm -rf {{ variant }}/chunked
     podman run --rm \
         --mount type=image,src={{ rootfs }},dst=/chunkah \
+        --volume "$PWD/{{ variant }}:/srv:z" \
         --env CHUNKAH_CONFIG_STR="$(podman image inspect {{ rootfs }})" \
         {{ chunkah_image }} build \
             --max-layers 128 \
             --source-date-epoch 0 \
-            --tag {{ chunked }} \
-        | podman load
+            --output oci:chunked
     podman build --platform linux/arm64 \
-        --build-context chunked=container-image://{{ chunked }} \
+        --build-context chunked=container-image://"$(podman pull --quiet oci:{{ variant }}/chunked)" \
         --tag {{ reference }} {{ args }} {{ variant }}
 
 # Save the image as an OCI archive for `disk`.
@@ -121,6 +121,6 @@ flash file=(disk_name + ".img"):
 connect:
     scripts/connect.sh
 
-# Remove generated disk images and the OCI archive.
+# Remove generated disk images, the OCI archive and the chunkah output.
 clean:
-    rm -f {{ disk_name }}*.img* {{ oci_archive }}
+    rm -rf {{ disk_name }}*.img* {{ oci_archive }} {{ variant }}/chunked
