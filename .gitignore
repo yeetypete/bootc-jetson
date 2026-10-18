@@ -1,2 +1,3 @@
 image.oci
 bootc-jetson-*.img*
+/*/chunked/
