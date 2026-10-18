@@ -95,35 +95,18 @@ jobs:
           REVISION: ${{ steps.tags.outputs.short_sha }}
           CACHE: ghcr.io/${{ github.repository }}/cache-${{ matrix.variant }}
         run: |
-          podman build \
-            --platform linux/arm64 \
+          just variant="$VARIANT" build \
             --build-arg VERSION="$VERSION" \
             --build-arg REVISION="$REVISION" \
             --cache-from "$CACHE" \
-            --cache-to "$CACHE" \
-            --tag "bootc-jetson-$VARIANT" \
-            "$VARIANT"
+            --cache-to "$CACHE"
 
-      # Tagging scheme:
-      # 1. The short sha tag is pushed on every build. Short 7 character SHA is
-      # used to make it easier to type when running `bootc switch`.
-      # 2. Releases also push the version tag and move the rolling
-      # <variant>-jp<jetpack> tag, which `bootc upgrade` follows.
       - name: Push image
         env:
           VARIANT: ${{ matrix.variant }}
           SHORT_SHA: ${{ steps.tags.outputs.short_sha }}
           VERSION: ${{ steps.tags.outputs.version }}
-        run: |
-          base="$VARIANT-jp$JETPACK"
-          tags=("$base-$SHORT_SHA")
-          if [ -n "$VERSION" ]; then
-            tags+=("$base-$VERSION" "$base")
-          fi
-          for tag in "${tags[@]}"; do
-            podman push --compression-format zstd --force-compression \
-              "bootc-jetson-$VARIANT" "$REPOSITORY:$tag"
-          done
+        run: just variant="$VARIANT" push "$SHORT_SHA" "$VERSION"
 
       # Install from the registry, so the disk image boots the pushed digest.
       - name: Create disk image
