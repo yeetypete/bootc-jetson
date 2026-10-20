@@ -17,6 +17,9 @@ chunkah_image := "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
+# Registry that caches the rootfs build's layers, if set.
+cache := env("CACHE", "")
+cache_args := if cache == "" { "" } else { "--cache-from=" + cache + " --cache-to=" + cache }
 # UEFI firmware for `vm`, from the qemu-efi-aarch64 package.
 aavmf := "/usr/share/AAVMF"
 
@@ -35,7 +38,7 @@ test:
 
 # Build the rootfs stage, rechunk it with chunkah, and build the image from it.
 build *args:
-    podman build --platform linux/arm64 --target rootfs --tag {{ rootfs }} {{ args }} {{ variant }}
+    podman build --platform linux/arm64 --target rootfs --tag {{ rootfs }} {{ cache_args }} {{ args }} {{ variant }}
     rm -rf {{ variant }}/chunked
     podman run --rm \
         --mount type=image,src={{ rootfs }},dst=/chunkah \
