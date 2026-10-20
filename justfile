@@ -10,10 +10,6 @@ variant := "orin"
 # The rolling tag installed systems follow with `bootc upgrade`.
 tag := variant + "-jp" + jetpack
 reference := repository + ":" + tag
-# Local image of the rootfs stage, which chunkah rechunks.
-rootfs := "localhost/bootc-jetson-" + variant + "-rootfs"
-# chunkah is used to split the rootfs into a layer per group of packages.
-chunkah_image := "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523"
 disk_name := "bootc-jetson-" + variant
 disk_size := "10G"
 oci_archive := "image.oci"
@@ -33,21 +29,16 @@ check:
 test:
     cd jetson-tools && cargo test --locked
 
-# Build the rootfs stage, rechunk it with chunkah, and build the image from it.
+# Build the image. The chunkah stage rechunks the rootfs into chunked/, which
+# the final image is built from.
+# --skip-unused-stages=false runs the chunkah stage, which no stage depends on.
+# The volume and label=disable let it write chunked/ with Buildah before 1.44.
+# podman resolves FROM oci:chunked against its working directory, so it runs in
+# the variant's build dir.
 build *args:
-    podman build --platform linux/arm64 --target rootfs --tag {{ rootfs }} {{ args }} {{ variant }}
-    rm -rf {{ variant }}/chunked
-    podman run --rm \
-        --mount type=image,src={{ rootfs }},dst=/chunkah \
-        --volume "$PWD/{{ variant }}:/srv:z" \
-        --env CHUNKAH_CONFIG_STR="$(podman image inspect {{ rootfs }})" \
-        {{ chunkah_image }} build \
-            --max-layers 128 \
-            --source-date-epoch 0 \
-            --output oci:chunked
-    podman build --platform linux/arm64 \
-        --build-context chunked=container-image://"$(podman pull --quiet oci:{{ variant }}/chunked)" \
-        --tag {{ reference }} {{ args }} {{ variant }}
+    cd {{ variant }} && podman build --platform linux/arm64 --skip-unused-stages=false \
+        --volume "$PWD:/run/src" --security-opt label=disable \
+        --tag {{ reference }} {{ args }} .
 
 # Save the image as an OCI archive for `disk`.
 save:

@@ -1,10 +1,10 @@
-# hadolint global ignore=DL3006,DL3008,DL3059,DL4006
-# DL3006: chunked is a build context, not an image to tag.
+# hadolint global ignore=DL3008,DL3059,DL4006
 # DL4006: podman builds OCI images, which ignore SHELL, so RUN keeps /bin/sh.
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 ARG RUST_IMAGE=docker.io/library/rust:1.99-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6
 ARG BOOTC_IMAGECTL_REV=6d23389889b79393ffbc0c14a25147bc92b6e480
+ARG CHUNKAH_IMAGE=quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523
 
 
 FROM ${UBUNTU_IMAGE} AS system-files
@@ -242,7 +242,22 @@ RUN bootc container split-kernel-and-rootfs --output /kernel && \
 RUN bootc container lint --fatal-warnings
 
 
-# `just build` passes rootfs rechunked by chunkah as the chunked build context.
+# chunkah splits rootfs into a layer per group of packages. It writes the image
+# to chunked/ in the build context, which the chunked stage starts from.
+FROM ${CHUNKAH_IMAGE} AS chunkah
+
+RUN --mount=type=bind,target=/run/src,rw \
+    --mount=type=bind,from=rootfs,target=/chunkah,ro \
+    rm -rf /run/src/chunked && \
+    chunkah build \
+    --max-layers 128 \
+    --source-date-epoch 0 \
+    --output oci:/run/src/chunked
+
+
+FROM oci:chunked AS chunked
+
+
 # Seal the UKI from chunked so that its composefs digest covers the mtimes
 # chunkah rewrites.
 FROM chunked AS uki
@@ -260,6 +275,10 @@ RUN --mount=type=bind,from=chunked,target=/target \
 FROM chunked
 
 COPY --from=uki /uki/ /boot/EFI/Linux/
+
+# chunked has an empty image config.
+LABEL containers.bootc=1
+CMD ["/sbin/init"]
 
 ARG VERSION=v0.0.0
 ARG REVISION=
