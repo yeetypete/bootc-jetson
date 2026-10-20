@@ -97,9 +97,7 @@ jobs:
         run: |
           just variant="$VARIANT" build \
             --build-arg VERSION="$VERSION" \
-            --build-arg REVISION="$REVISION" \
-            --cache-from "$CACHE" \
-            --cache-to "$CACHE"
+            --build-arg REVISION="$REVISION"
 
       - name: Push image
         env:
